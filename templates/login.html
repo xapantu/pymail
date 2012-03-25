@@ -1,0 +1,14 @@
+{% extends "root.html" %}
+{% block body %}
+
+<form method="POST" action="/">
+    <label>Username</label>
+    <input type="text" name="email" />
+    <label>Host</label>
+    <input type="text" name="host" />
+    <label>Password</label>
+    <input type="text" name="password" />
+    <input type="submit" :>
+</form>
+
+{% endblock %}

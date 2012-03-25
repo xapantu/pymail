@@ -4,6 +4,6 @@ create table mails (
     subject string not null,
     account string not null,
     imapid id not null,
-    fulltext string,
+    fulltext blob,
     seen integer not null
 );

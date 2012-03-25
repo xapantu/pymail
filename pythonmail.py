@@ -118,6 +118,25 @@ def load_message_with_cache(mail, database, page_size, page):
     
     return mails_id
 
+def clean_text(text):
+    return text.replace("\r\n", "").replace("\n", "<br />")
+def get_content_from_message(message_instance):
+    content = ""
+    maintype = message_instance.get_content_type()
+    app.logger.debug(maintype)
+    import quopri
+    import chardet
+    if maintype in ("multipart/mixed", "multipart/alternative"): #arg :(
+        for part in message_instance.get_payload():
+            content += get_content_from_message(part)
+    elif maintype == "text/plain":
+        data = quopri.decodestring(message_instance.get_payload())
+        content += data.decode(chardet.detect(data)["encoding"]).replace("\n", "<br />")
+    elif maintype == "text/html":
+        data = quopri.decodestring(message_instance.get_payload())
+        content += data.decode(chardet.detect(data)["encoding"])
+    return content
+
 @app.route("/mails/<int:imapid>")
 def view_mail(imapid):
     if not session.has_key("email"):
@@ -138,24 +157,15 @@ def view_mail(imapid):
                 pass
             else:
                 typ, data = mail.uid("fetch", imapid, '(body.peek[])')
-                email_message = email.message_from_string(data[0][1])
-                content = email_message.get_payload()
-                try:
-                    content = unicode(content, "utf-8")
-                except:
-                    try:
-                        content = unicode(content, "iso-8859-1")
-                    except:
-                        content = unicode(content, "utf-8", errors="ignore")
-                database.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(content,)])
+                app.logger.debug(data[0][1])
+                database.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(data[0][1],)])
                 database.commit()
                 database.close()
-                message["fulltext"] = content
-            content = message["fulltext"]
-            content = content.replace("\n", "<br />")
-            content = content.replace("\r", "")
-            message["fulltext"] = content
-            return render_template("message.html", message=message)
+                message["fulltext"] = data[0][1]
+            email_message = email.message_from_string(str(message["fulltext"]))
+            content = get_content_from_message(email_message)
+            #message["fulltext"] = content
+            return render_template("message.html", message=content)
         else:
             mails_id = {} # not used here, just a simple dict to send to load_message, useless in our case
             load_message(mail, mails_id, imapid, imapid, database)

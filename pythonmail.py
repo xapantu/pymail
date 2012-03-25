@@ -164,6 +164,9 @@ def view_mail(imapid):
             return view_mail(imapid)
 
 
+@app.route("/", methods=["GET", "POST"])
+def start():
+    return root(0)
 
 @app.route("/<int:page>", methods=["GET", "POST"])
 def root(page):
@@ -193,7 +196,7 @@ def root(page):
         content += "<br />" + strftime("%H:%M:%S")
 
 
-        mails_id = load_message_with_cache(mail, database, 50, page)
+        mails_id = load_message_with_cache(mail, database, 500, page)
         
         database.commit()
         database.close()

@@ -49,7 +49,7 @@ def load_message(mail, mails_id, start, end, database):
     if start > end:
         return
     typ, data = mail.uid("fetch", str(start) + ":" + str(end),
-                         '(body.peek[header.fields (subject message-id)] flags)')
+                         '(body.peek[header.fields (subject message-id from)] flags)')
     app.logger.debug("start: %s, end: %s" % (start, end))
     for msg in data:
         if msg[0] == ")":
@@ -72,8 +72,12 @@ def load_message(mail, mails_id, start, end, database):
 
         email["imapid"] = message_id
         email["subject"] = subject
-        database.execute('insert into mails (subject, account, imapid, seen) values (?, ?, ?, ?)',
-                         [email["subject"], session["email"], email["imapid"], seen])
+        email["sender"] = decode_header(header["from"])[0]
+        encodage = "utf-8"
+        if email["sender"][1] is not None: encodage = email["sender"][1]
+        email["sender"] = email["sender"][0].decode(encodage)
+        database.execute('insert into mails (subject, account, imapid, seen, sender) values (?, ?, ?, ?, ?)',
+                         [email["subject"], session["email"], email["imapid"], seen, email["sender"]])
         mails_id[message_id] = email
 
 def load_message_with_cache(mail, database, page_size, page):
@@ -86,12 +90,12 @@ def load_message_with_cache(mail, database, page_size, page):
         start_wanted = int(server_imap_ids[max(server_mail_count - (page + 1) * page_size + 1, 0)]) # 100 messages per page
         end_wanted = int(server_imap_ids[max(server_mail_count - page * page_size, 0)])
 
-        cur = database.execute('select imapid, subject, seen from mails where account = \'' + session["email"] + '\' and imapid >= ' + str(start_wanted) + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
+        cur = database.execute('select imapid, subject, seen, sender from mails where account = \'' + session["email"] + '\' and imapid >= ' + str(start_wanted) + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
     else:
-        cur = database.execute('select imapid, subject, seen from mails where account = \'' + session["email"] + '\' ORDER by imapid desc limit ' + str(page_size))
+        cur = database.execute('select imapid, subject, seen, sender from mails where account = \'' + session["email"] + '\' ORDER by imapid desc limit ' + str(page_size))
     mails_id = {}
 
-    entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
+    entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=row[3]) for row in cur.fetchall()]
 
 
     if not app.config["OFFLINE"]:
@@ -214,7 +218,7 @@ def root(page):
             mail.select("inbox") # connect to inbox.
         database = connect_db()
 
-        mails_id = load_message_with_cache(mail, database, 500, page)
+        mails_id = load_message_with_cache(mail, database, 100, page)
         
         database.commit()
         database.close()

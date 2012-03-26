@@ -6,9 +6,9 @@
     <li id="entry-{{entry.imapid}}">
     <a href="javascript:view_message({{entry.imapid}})">
         {% if not entry.seen %}
-        <strong>{{ entry.subject }}</strong>
+        <strong>{{ entry.subject }}&nbsp; {{ entry.sender }}</strong>
         {% else %}
-        {{ entry.subject }}
+        {{ entry.subject }}&nbsp; {{ entry.sender }}
         {% endif %}
     </a>
     </li>

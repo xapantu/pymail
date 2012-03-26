@@ -6,5 +6,6 @@ create table mails (
     imapid id not null,
     fulltext blob,
     encoding string,
+    sender string,
     seen integer not null
 );

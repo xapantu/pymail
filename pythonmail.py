@@ -17,6 +17,7 @@ app = Flask(__name__)
 DATABASE = "email.db"
 DEBUG=True
 SECRET_KEY="ah ah"
+OFFLINE=False
 
 app.config.from_object(__name__)
 
@@ -76,38 +77,43 @@ def load_message(mail, mails_id, start, end, database):
         mails_id[message_id] = email
 
 def load_message_with_cache(mail, database, page_size, page):
-    typ, data = mail.uid("search", None, 'ALL')
+    if not app.config["OFFLINE"]:
+        typ, data = mail.uid("search", None, 'ALL')
 
-    # How many messages available?
-    server_imap_ids = data[0].split()
-    server_mail_count = len(server_imap_ids) - 1
-    start_wanted = int(server_imap_ids[max(server_mail_count - (page + 1) * page_size + 1, 0)]) # 100 messages per page
-    end_wanted = int(server_imap_ids[max(server_mail_count - page * page_size, 0)])
+        # How many messages available?
+        server_imap_ids = data[0].split()
+        server_mail_count = len(server_imap_ids) - 1
+        start_wanted = int(server_imap_ids[max(server_mail_count - (page + 1) * page_size + 1, 0)]) # 100 messages per page
+        end_wanted = int(server_imap_ids[max(server_mail_count - page * page_size, 0)])
 
+        cur = database.execute('select imapid, subject, seen from mails where account = \'' + session["email"] + '\' and imapid >= ' + str(start_wanted) + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
+    else:
+        cur = database.execute('select imapid, subject, seen from mails where account = \'' + session["email"] + '\' ORDER by imapid desc limit ' + str(page_size))
     mails_id = {}
 
-    cur = database.execute('select imapid, subject, seen from mails where account = \'' + session["email"] + '\' and imapid >= ' + str(start_wanted) + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
     entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
 
-    # So, here, we can:
-    # - have all messages
-    # - have the first messages
-    # - have the last messages
-    # So, we need to do *two* fetchs
-    
-    first_db_id = end_wanted # means we have nothing
-    end_db_id = end_wanted # means we have everything. If we don't have anything, we
-                           # don't need this (only one fetch is required), otherwise,
-                           # it will be set later
-    if len(entries) > 0:
-        first_db_id = entries[0]["imapid"] - 1
-        end_db_id = entries[-1]["imapid"] + 1
 
-    # First fetch from start_wanted to first_db_id (let's hope it is ==)
-    load_message(mail, mails_id, start_wanted, first_db_id, database)
+    if not app.config["OFFLINE"]:
+        # So, here, we can:
+        # - have all messages
+        # - have the first messages
+        # - have the last messages
+        # So, we need to do *two* fetchs
+        
+        first_db_id = end_wanted # means we have nothing
+        end_db_id = end_wanted # means we have everything. If we don't have anything, we
+                               # don't need this (only one fetch is required), otherwise,
+                               # it will be set later
+        if len(entries) > 0:
+            first_db_id = entries[0]["imapid"] - 1
+            end_db_id = entries[-1]["imapid"] + 1
 
-    # Then from end_db_id to end_wanted
-    load_message(mail, mails_id, end_db_id, end_wanted, database)
+        # First fetch from start_wanted to first_db_id (let's hope it is ==)
+        load_message(mail, mails_id, start_wanted, first_db_id, database)
+
+        # Then from end_db_id to end_wanted
+        load_message(mail, mails_id, end_db_id, end_wanted, database)
 
     # load other mails
     for entry in entries:
@@ -142,10 +148,11 @@ def view_mail(imapid):
     if not session.has_key("email"):
         return redirect("/")
     else:
-        if not imap_accounts.has_key(session["email"]):
-            load_imap_account(session["host"], session["email"], session["password"])
-        mail = imap_accounts[session["email"]]
-        mail.select("inbox") # connect to inbox.
+        if not app.config["OFFLINE"]:
+            if not imap_accounts.has_key(session["email"]):
+                load_imap_account(session["host"], session["email"], session["password"])
+            mail = imap_accounts[session["email"]]
+            mail.select("inbox") # connect to inbox.
         # First - is it in the DB?
         database = connect_db()
         cur = database.execute('select imapid, subject, seen, fulltext from mails'
@@ -158,11 +165,13 @@ def view_mail(imapid):
             else:
                 typ, data = mail.uid("fetch", imapid, '(body.peek[])')
                 app.logger.debug(data[0][1])
-                database.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(data[0][1],)])
+                import chardet
+                msg = data[0][1].decode(chardet.detect(data[0][1])["encoding"])
+                database.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(msg,)])
                 database.commit()
                 database.close()
-                message["fulltext"] = data[0][1]
-            email_message = email.message_from_string(str(message["fulltext"]))
+                message["fulltext"] = msg
+            email_message = email.message_from_string(message["fulltext"].encode("utf-8"))
             content = get_content_from_message(email_message)
             #message["fulltext"] = content
             return render_template("message.html", message=content)
@@ -193,18 +202,14 @@ def root(page):
     elif not session.has_key("email"):
         return render_template("login.html")
     else:
-        if not imap_accounts.has_key(session["email"]):
-            load_imap_account(session["host"], session["email"], session["password"])
+        mail = None
+        if not app.config["OFFLINE"]:
+            if not imap_accounts.has_key(session["email"]):
+                load_imap_account(session["host"], session["email"], session["password"])
+            mail = imap_accounts[session["email"]]
+            # Out: list of "folders" aka labels in gmail.
+            mail.select("inbox") # connect to inbox.
         database = connect_db()
-        content = ""
-        content += "<br />" + strftime("%H:%M:%S")
-        mail = imap_accounts[session["email"]]
-        # Out: list of "folders" aka labels in gmail.
-        mail.select("inbox") # connect to inbox.
-
-        #return "yes"
-        content += "<br />" + strftime("%H:%M:%S")
-
 
         mails_id = load_message_with_cache(mail, database, 500, page)
         

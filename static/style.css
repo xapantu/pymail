@@ -32,3 +32,8 @@ h2              { font-size: 1.2em; }
 a:active, a:focus{
           outline:none;
       }
+
+      #content {
+          display:block;
+          width:100%;
+      }

@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, session, request, redirect, url_for
+from flask import Flask, render_template, session, request, redirect, url_for, jsonify
 from email.parser import HeaderParser
 from email.header import decode_header
 import email
@@ -177,7 +177,7 @@ def view_mail(imapid):
             email_message = email.message_from_string(message["fulltext"].encode(encoding))
             content = get_content_from_message(email_message)
             #message["fulltext"] = content
-            return render_template("message.html", message=content)
+            return jsonify(message=render_template("message.html", message=content))
         else:
             mails_id = {} # not used here, just a simple dict to send to load_message, useless in our case
             load_message(mail, mails_id, imapid, imapid, database)

@@ -36,4 +36,12 @@ a:active, a:focus{
       #content {
           display:block;
           width:100%;
+          float:left;
+      }
+      #sidebar {
+          float:left;
+          width:0%;
+          overflow:hidden;
+          position:fixed;
+          left:100%;
       }

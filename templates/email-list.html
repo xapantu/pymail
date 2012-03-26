@@ -4,7 +4,7 @@
 <ul class=entries>
     {% for entry in emails %}
     <li id="entry-{{entry.imapid}}">
-    <a href="/mails/{{entry.imapid}}">
+    <a href="javascript:view_message({{entry.imapid}})">
         {% if not entry.seen %}
         <strong>{{ entry.subject }}</strong>
         {% else %}

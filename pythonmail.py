@@ -130,17 +130,16 @@ def get_content_from_message(message_instance):
     content = ""
     maintype = message_instance.get_content_type()
     app.logger.debug(maintype)
-    import quopri
-    import chardet
+    encoding = message_instance.get_content_charset("utf-8")
     if maintype in ("multipart/mixed", "multipart/alternative"): #arg :(
         for part in message_instance.get_payload():
             content += get_content_from_message(part)
     elif maintype == "text/plain":
-        data = quopri.decodestring(message_instance.get_payload())
-        content += data.decode(chardet.detect(data)["encoding"]).replace("\n", "<br />")
+        data = message_instance.get_payload(decode=True)
+        content += data.decode(encoding).replace("\n", "<br />")
     elif maintype == "text/html":
-        data = quopri.decodestring(message_instance.get_payload())
-        content += data.decode(chardet.detect(data)["encoding"])
+        data = message_instance.get_payload(decode=True)
+        content += data.decode(encoding)
     return content
 
 @app.route("/mails/<int:imapid>")
@@ -155,23 +154,27 @@ def view_mail(imapid):
             mail.select("inbox") # connect to inbox.
         # First - is it in the DB?
         database = connect_db()
-        cur = database.execute('select imapid, subject, seen, fulltext from mails'
+        cur = database.execute('select imapid, subject, seen, encoding, fulltext from mails'
                                + ' where account = \'' + session["email"] + '\' and imapid = ' + str(imapid))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], fulltext=row[3]) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], fulltext=row[3], encoding=row[4]) for row in cur.fetchall()]
+        import chardet
         if len(entries) > 0: # yay, we have it in the db
             message = entries[0]
+            encoding = "utf-8"
             if message["fulltext"] is not None: # yay, we even have the content!!
+                encoding = message["encoding"]
                 pass
             else:
                 typ, data = mail.uid("fetch", imapid, '(body.peek[])')
                 app.logger.debug(data[0][1])
-                import chardet
                 msg = data[0][1].decode(chardet.detect(data[0][1])["encoding"])
+                app.logger.debug(chardet.detect(data[0][1]))
                 database.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(msg,)])
                 database.commit()
                 database.close()
                 message["fulltext"] = msg
-            email_message = email.message_from_string(message["fulltext"].encode("utf-8"))
+                encoding = chardet.detect(data[0][1])["encoding"]
+            email_message = email.message_from_string(message["fulltext"].encode(encoding))
             content = get_content_from_message(email_message)
             #message["fulltext"] = content
             return render_template("message.html", message=content)

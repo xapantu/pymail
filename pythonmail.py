@@ -121,10 +121,22 @@ def load_message_with_cache(mail, database, page_size, page):
 
     # load other mails
     for entry in entries:
-        email = {}
-        email["seen"] = entry["seen"]
-        email["subject"] = entry["subject"]
         mails_id[str(entry["imapid"])] = entry
+    
+    if not app.config["OFFLINE"]:
+        app.logger.debug(str(first_db_id))
+        app.logger.debug(str(end_db_id))
+        typ, data = mail.uid("fetch", str(first_db_id+1) + ":" + str(end_db_id),
+                             '(flags)')
+        for msg in data:
+            mailid = msg.split()[2]
+            old_seen = mails_id[mailid]["seen"]
+            seen = "\\Seen" in imaplib.ParseFlags(msg)
+            if old_seen is not int(seen):
+                app.logger.debug("DIFFERENT for message " + str(mailid) + str(seen) + str(old_seen))
+                database.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
+            mails_id[mailid]["seen"] = seen
+            #email["seen"] = seen
     
     return mails_id
 
@@ -218,7 +230,7 @@ def root(page):
             mail.select("inbox") # connect to inbox.
         database = connect_db()
 
-        mails_id = load_message_with_cache(mail, database, 100, page)
+        mails_id = load_message_with_cache(mail, database, 50, page)
         
         database.commit()
         database.close()

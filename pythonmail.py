@@ -49,16 +49,20 @@ def load_message(mail, mails_id, start, end, database):
     if start > end:
         return
     typ, data = mail.uid("fetch", str(start) + ":" + str(end),
-                         '(body.peek[header.fields (subject message-id from)] flags)')
+                         '(body.peek[header.fields (subject message-id from)] x-gm-thrid flags)')
     app.logger.debug("start: %s, end: %s" % (start, end))
     for msg in data:
         if msg[0] == ")":
             continue
         email = {}
-        message_id = msg[0].split()[2]
+        values_split = msg[0].replace("(", "").split()
+        uid_index = values_split.index("UID")
+        thrid_index = values_split.index("X-GM-THRID")
+        #thrid_index = values_split.index("X")
+        message_id = values_split[uid_index+1]
+        thrid = values_split[thrid_index+1]
         if mails_id.has_key(message_id):
             continue
-        app.logger.debug(message_id)
         seen = "\\Seen" in imaplib.ParseFlags(msg[0])
         email["seen"] = seen
 
@@ -76,9 +80,34 @@ def load_message(mail, mails_id, start, end, database):
         encodage = "utf-8"
         if email["sender"][1] is not None: encodage = email["sender"][1]
         email["sender"] = email["sender"][0].decode(encodage)
-        database.execute('insert into mails (subject, account, imapid, seen, sender) values (?, ?, ?, ?, ?)',
-                         [email["subject"], session["email"], email["imapid"], seen, email["sender"]])
+        database.execute('insert into mails (subject, account, imapid, seen, sender, thrid)'
+                       + ' values (?, ?, ?, ?, ?, ?)',
+                         [email["subject"], session["email"], email["imapid"], seen, email["sender"], thrid])
+        database.commit()
         mails_id[message_id] = email
+        cur = database.execute('select imapid from threads'
+                             + ' where imapid = \'' + str(thrid) + '\''
+                             + ' and account = \'' + session["email"] + '\''
+                             + ' limit 1')
+        if len(cur.fetchall()) is 0:
+            # We need to add a new thread
+            database.execute('insert into threads (subject, imapid, account)'
+                       + ' values (?, ?, ?)',
+                         [email["subject"], thrid, session["email"]])
+
+def load_threads(mail, database, page_size, page):
+    if app.config["OFFLINE"]:
+        raise("TODO")
+    else:
+        cur = database.execute('select imapid, subject from threads'
+                             + ' where account = \'' + session["email"] + '\''
+                             + ' order by imapid desc limit ' + str(page_size))
+    mails_id = {}
+
+    entries = [dict(imapid=row[0], subject=row[1]) for row in cur.fetchall()]
+    for entry in entries:
+        mails_id[entry["imapid"]] = entry
+    return mails_id
 
 def load_message_with_cache(mail, database, page_size, page):
     if not app.config["OFFLINE"]:
@@ -90,9 +119,14 @@ def load_message_with_cache(mail, database, page_size, page):
         start_wanted = int(server_imap_ids[max(server_mail_count - (page + 1) * page_size + 1, 0)]) # 100 messages per page
         end_wanted = int(server_imap_ids[max(server_mail_count - page * page_size, 0)])
 
-        cur = database.execute('select imapid, subject, seen, sender from mails where account = \'' + session["email"] + '\' and imapid >= ' + str(start_wanted) + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
+        cur = database.execute('select imapid, subject, seen, sender from mails'
+                             + ' where account = \'' + session["email"] + '\''
+                             + ' and imapid >= ' + str(start_wanted)
+                             + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
     else:
-        cur = database.execute('select imapid, subject, seen, sender from mails where account = \'' + session["email"] + '\' ORDER by imapid desc limit ' + str(page_size))
+        cur = database.execute('select imapid, subject, seen, sender from mails'
+                             + ' where account = \'' + session["email"] + '\''
+                             + ' order by imapid desc limit ' + str(page_size))
     mails_id = {}
 
     entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=row[3]) for row in cur.fetchall()]
@@ -136,12 +170,9 @@ def load_message_with_cache(mail, database, page_size, page):
                 app.logger.debug("DIFFERENT for message " + str(mailid) + str(seen) + str(old_seen))
                 database.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
             mails_id[mailid]["seen"] = seen
-            #email["seen"] = seen
     
     return mails_id
 
-def clean_text(text):
-    return text.replace("\r\n", "").replace("\n", "<br />")
 def get_content_from_message(message_instance):
     content = ""
     maintype = message_instance.get_content_type()
@@ -158,31 +189,60 @@ def get_content_from_message(message_instance):
         content += data.decode(encoding)
     return content
 
+@app.route("/mails_thread/<imapid>")
+def view_full_thread(imapid):
+    database = connect_db()
+    cur = database.execute('select imapid from mails'
+                           + ' where account = \'' + session["email"] + '\' and thrid = ' + imapid)
+    app.logger.debug('select imapid from mails'
+                           + ' where account = \'' + session["email"] + '\' and thrid = ' + imapid)
+    entries = [dict(imapid=row[0]) for row in cur.fetchall()]
+    content = "";
+    even = False
+    for entry in entries:
+        app.logger.debug(entry["imapid"])
+        raw = view_mail_raw(entry["imapid"], True, even)
+        if content is "":
+            content += "<h4>" + raw[1]["subject"] + "</h4>"
+        content += raw[0]
+        content += "<div class='clearer'></div>"
+        even = not even
+    return jsonify(message=content)
+
+
 @app.route("/mails/<int:imapid>")
 def view_mail(imapid):
+    return jsonify(message=view_mail_raw(imapid))
+
+def view_mail_raw(imapid, threaded = False, even = False):
     if not session.has_key("email"):
         return redirect("/")
     else:
-        if not app.config["OFFLINE"]:
-            if not imap_accounts.has_key(session["email"]):
-                load_imap_account(session["host"], session["email"], session["password"])
-            mail = imap_accounts[session["email"]]
-            mail.select("inbox") # connect to inbox.
         # First - is it in the DB?
         database = connect_db()
-        cur = database.execute('select imapid, subject, seen, encoding, fulltext from mails'
+        cur = database.execute('select imapid, subject, seen, fulltext, encoding, sender from mails'
                                + ' where account = \'' + session["email"] + '\' and imapid = ' + str(imapid))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], fulltext=row[3], encoding=row[4]) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1],
+                        seen=row[2], fulltext=row[3], encoding=row[4], sender=row[5]) for row in cur.fetchall()]
         import chardet
         if len(entries) > 0: # yay, we have it in the db
             message = entries[0]
-            encoding = "utf-8"
+            encoding = "utf-8" # is this encoding stuff *really* necessary?
             if message["fulltext"] is not None: # yay, we even have the content!!
-                encoding = message["encoding"]
-                pass
+                if message["encoding"] is not None:
+                    encoding = message["encoding"]
             else:
+                if not app.config["OFFLINE"]:
+                    if not imap_accounts.has_key(session["email"]):
+                        load_imap_account(session["host"], session["email"], session["password"])
+                    mail = imap_accounts[session["email"]]
+                    try:
+                        mail.select("inbox") # connect to inbox.
+                    except imaplib.abort:
+                        load_imap_account(session["host"], session["email"], session["password"])
+                        mail = imap_accounts[session["email"]]
+                        mail.select("inbox") # connect to inbox.
                 typ, data = mail.uid("fetch", imapid, '(body.peek[])')
-                app.logger.debug(data[0][1])
                 msg = data[0][1].decode(chardet.detect(data[0][1])["encoding"])
                 app.logger.debug(chardet.detect(data[0][1]))
                 database.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(msg,)])
@@ -192,8 +252,14 @@ def view_mail(imapid):
                 encoding = chardet.detect(data[0][1])["encoding"]
             email_message = email.message_from_string(message["fulltext"].encode(encoding))
             content = get_content_from_message(email_message)
-            #message["fulltext"] = content
-            return jsonify(message=render_template("message.html", message=content))
+            message_tpl = {}
+            message_tpl["body"] = content
+            message_tpl["subject"] = message["subject"]
+            message_tpl["sender"] = message["sender"]
+            if threaded:
+                return (render_template("message.html", message=message_tpl, even=even), message_tpl)
+            else:
+                return render_template("message.html", message=message_tpl, even=even)
         else:
             mails_id = {} # not used here, just a simple dict to send to load_message, useless in our case
             load_message(mail, mails_id, imapid, imapid, database)
@@ -205,6 +271,37 @@ def view_mail(imapid):
 @app.route("/", methods=["GET", "POST"])
 def start():
     return root(0)
+
+@app.route("/threads/<int:page>")
+def view_thread(page):
+    # Several case:
+    #   - not logged but he sent the authentification things
+    #   - the user is not logged
+    #   - logged
+
+    if not session.has_key("email"):
+        return render_template("login.html")
+    else:
+        mail = None
+        if not app.config["OFFLINE"]:
+            if not imap_accounts.has_key(session["email"]):
+                load_imap_account(session["host"], session["email"], session["password"])
+            mail = imap_accounts[session["email"]]
+            # Out: list of "folders" aka labels in gmail.
+            try:
+                mail.select("inbox") # connect to inbox.
+            except imaplib.abort:
+                load_imap_account(session["host"], session["email"], session["password"])
+                mail = imap_accounts[session["email"]]
+                mail.select("inbox") # connect to inbox.
+        database = connect_db()
+
+        mails_id = load_threads(mail, database, 50, page)
+        
+        database.commit()
+        database.close()
+        emails_list = sorted(mails_id.values(), lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
+        return render_template('email-thread.html', page=page, emails=emails_list)
 
 @app.route("/<int:page>", methods=["GET", "POST"])
 def root(page):
@@ -227,17 +324,21 @@ def root(page):
                 load_imap_account(session["host"], session["email"], session["password"])
             mail = imap_accounts[session["email"]]
             # Out: list of "folders" aka labels in gmail.
-            mail.select("inbox") # connect to inbox.
+            try:
+                mail.select("inbox") # connect to inbox.
+            except imaplib.abort:
+                load_imap_account(session["host"], session["email"], session["password"])
+                mail = imap_accounts[session["email"]]
+                mail.select("inbox") # connect to inbox.
         database = connect_db()
 
         mails_id = load_message_with_cache(mail, database, 50, page)
         
         database.commit()
         database.close()
-        return render_template('email-list.html', page=page, emails=sorted(mails_id.values(), lambda x, y: cmp(int(y["imapid"]), int(x["imapid"]))))
+        emails_list = sorted(mails_id.values(), lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
+        return render_template('email-list.html', page=page, emails=emails_list)
 
 if __name__ == "__main__":
-    #load_imap_account()
     app.debug = True
     app.run()
-    #close_imap_account()

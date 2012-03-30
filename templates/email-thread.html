@@ -4,7 +4,7 @@
 <ul class=entries>
     {% for entry in emails %}
     <li id="entry-{{entry.imapid}}">
-    <a href="javascript:view_message('{{entry.imapid}}')">
+    <a href="javascript:view_thread('{{entry.imapid}}')" class="{{ loop.cycle('odd', 'even') }}">
         <span>
             {% if not entry.seen %}
             <strong>{{ entry.subject }}&nbsp; {{ entry.sender }}</strong>

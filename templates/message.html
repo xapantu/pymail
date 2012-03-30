@@ -1,5 +1,7 @@
-<div class="message">
+<div class="message{% if even %} message-even{% endif %}">
+    <strong>{{message.sender}}</strong>
+    <br />
     {% autoescape false %}
-    {{message}}
+    {{message.body}}
     {% endautoescape %}
 </div>

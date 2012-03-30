@@ -1,4 +1,4 @@
-body            { font-family: Ubuntu, sans-serif; background: #eee; }
+body            { height:100%; width:100%; position:absolute; margin:0; padding:0; display:block; font-family: sans-serif; background: #eee; }
 a, h1, h2       { color: #377BA8; }
 h1, h2          { font-family: 'Georgia', serif; margin: 0; }
 h1              { border-bottom: 2px solid #eee; }
@@ -8,17 +8,32 @@ h2              { font-size: 1.2em; }
                   padding: 0.8em; background: white; }
 .entries        { list-style: none; margin: 0; padding: 0; }
 .entries li     {
-    padding: 0.5em;
     border-bottom:1px lightgrey solid;
     background-color:white;
 }
 .entries li a {
+    border-top:0.5px transparent solid;
     display:block;
     width: 100%;
+    color:#333;
     text-overflow:ellipsis;
     white-space:nowrap;
     overflow:hidden;
     text-decoration:none;
+}
+.entries li a.even {
+    background-color:#F4F5FF;
+}
+.entries li a span {
+    display:block;
+    padding: 0.5em;
+}
+.entries li a:hover {
+    border-top:0.5px #e5e5e5 solid;
+    /*background-image:linear-gradient(top, #e1e1e1 0%, #d5d5d5 100%);
+    background-image:-moz-linear-gradient(top, #e1e1e1 0%, #d5d5d5 100%);*/
+    background-color:#243EA7;
+    color:white;
 }
 .entries li h2  { margin-left: -1em; }
 .add-entry      { font-size: 0.9em; border-bottom: 1px solid #ccc; }
@@ -29,19 +44,42 @@ h2              { font-size: 1.2em; }
                   border: 1px solid #AACBE2; }
 .error          { background: #F0D6D6; padding: 0.5em; }
 
-a:active, a:focus{
-          outline:none;
-      }
+a:active, a:focus {
+  outline:none;
+}
 
-      #content {
-          display:block;
-          width:100%;
-          float:left;
-      }
-      #sidebar {
-          float:left;
-          width:0%;
-          overflow:hidden;
-          position:fixed;
-          left:100%;
-      }
+#content {
+  display:block;
+  width:100%;
+  float:left;
+  height:100%;
+  overflow:auto;
+}
+#sidebar {
+  float:left;
+  width:0%;
+  overflow:auto;
+  height:100%;
+  background-color:white;
+}
+
+.clearer {
+  clear:both;
+}
+
+.message {
+    /*margin:0.5em;*/
+    padding:1em;
+
+    background-color:#E7F3FF;
+    /*border-radius:5px;
+    box-shadow: 0 0 3px 3px #d5d5d5;*/
+    border-bottom:1px solid #aaa;
+}
+.message-even {
+    background-color:#E8FFE7;
+}
+
+#sidebar h4 {
+    margin:0.8em;
+}

@@ -4,41 +4,38 @@
         <title>Hello from Flask</title>
         <link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
         <script type=text/javascript src="{{ url_for('static', filename='jquery-1.7.2.min.js') }}" ></script>
+        <script type="text/javascript">
+            sidebar_view = false;
+            function view_message(id) {
+                $("#sidebar").html("...");
+                if(!sidebar_view) {
+                    $("#sidebar").css({width:"50%"});
+                    $("#content").css({width:"50%"});
+                }
+                sidebar_view = true;
+                $.getJSON('/mails/' + id, {}, function(data) {
+                    $("#sidebar").html(data.message);
+                });
+            }
+            function view_thread(id) {
+                $("#sidebar").html("...");
+                if(!sidebar_view) {
+                    $("#sidebar").css({width:"50%"});
+                    $("#content").css({width:"50%"});
+                }
+                sidebar_view = true;
+                $.getJSON('/mails_thread/' + id, {}, function(data) {
+                    $("#sidebar").html(data.message);
+                });
+            }
+        </script>
     </head>
     <body>
-                                <button id="showr">Show</button>
-                                  <button id="hidr">Hide</button>
-                                  <br />
-                                          <script type="text/javascript">
-                                              $("#showr").click(function() {
-                                                  $("#sidebar").animate({width:"50%"}, 100, function() {});
-                                                  $("#content").animate({width:"50%"}, 100, function() {});
-
-                                              });
-                                              $("#hidr").click(function() {
-                                                  $("#sidebar").animate({width:"0%"}, 250, function() {});
-                                                  $("#content").animate({width:"100%"}, 250, function() {});
-
-                                              });
-sidebar_view = false;
-function view_message(id) {
-                    $("#sidebar").html("...");
-    if(!sidebar_view) {
-        $("#sidebar").animate({width:"50%", left:"50%"}, 1000, function() {});
-        $("#content").animate({width:"50%"}, 1000, function() {});
-    }
-              sidebar_view = true;
-              $.getJSON('/mails/' + id, {}, function(data) {
-                    $("#sidebar").html(data.message);
-              });
-
-}
-
-                                                            </script>
         <div id="content">
         {% block body %}{% endblock %}
                                                         </div>
         <div id="sidebar">...</div>
+        <div class="clearer"></div>
 
     </body>
 </html>

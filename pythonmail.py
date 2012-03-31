@@ -52,11 +52,12 @@ class EmailAccount(object):
         mail.logout()
 
     def load_mailbox(self, mailbox):
+        self.mailbox = mailbox
         try:
             self.imap_mail.select(mailbox) # connect to inbox.
         except imaplib.abort: # maybe a timeout?
             self.load_imap_account()
-            self.imap_mail.select("inbox") # connect to inbox.
+            self.imap_mail.select(mailbox) # connect to inbox.
 
     def get_ns(self):
         return self.name + ":" + self.host
@@ -67,6 +68,8 @@ class EmailAccount(object):
     def load_messages(self):
         cur = self.db.execute('select imapid from mails'
                              + ' where account = \'' + self.get_ns() + '\''
+                             + self._get_where()
+                             + ' and mailbox = \'' + self.malibox + '\''
                              + ' order by imapid desc limit 1')
         
         last_imapid = 1
@@ -96,7 +99,8 @@ class EmailAccount(object):
         message["encoding"] = entry[2]
         message["subject"] = entry[3]
         message["sender"] = entry[4]
-        message["seen"] = True
+        message["seen"] = entry[5]
+        message["date"] = entry[6]
 
         encoding = "utf-8" # is this encoding stuff *really* necessary?
         if message["fulltext"] is not None: # yay, we even have the content!!
@@ -114,15 +118,17 @@ class EmailAccount(object):
     Return a dict with the message values (e.g. subject, sender, body...)
     """
     def load_message(self, imapid):
-        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen from mails'
+        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date from mails'
                              + ' where account = \'' + self.get_ns() + '\''
+                             + self._get_where()
+                             + ' and mailbox = \'' + self.malibox + '\''
                              + ' and imapid = ' + str(imapid))
         
         entry = cur.fetchall()
         if len(entry) is 0:
             self.download_messages(imapid)
-            cur = self.db.execute('select imapid from mails'
-                                 + ' where account = \'' + self.get_ns() + '\''
+            cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date from mails'
+                                 + self._get_where()
                                  + ' and imapid = ' + str(imapid))
             
             entry = cur.fetchall()
@@ -132,10 +138,10 @@ class EmailAccount(object):
         return self._format_message_from_db_row(entry[0])
    
     def update_flags(self, count):
-        cur = self.db.execute('select imapid, seen from mails'
-                             + ' where account = \'' + self.get_ns() + '\''
+        cur = self.db.execute('select imapid, seen, thrid from mails'
+                             + self._get_where()
                              + ' order by imapid desc limit ' + str(count))
-        entries = [dict(imapid=row[0], seen=row[1]) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], seen=row[1], thrid=row[2]) for row in cur.fetchall()]
         
         app.logger.debug("from %s to %s" % (entries[-1]["imapid"], entries[0]["imapid"]))
         typ, data = self.imap_mail.uid("fetch", str(entries[-1]["imapid"]) + ":" + str(entries[0]["imapid"]),
@@ -144,19 +150,31 @@ class EmailAccount(object):
         for entry in entries:
             mails_id[entry["imapid"]] = entry
 
+        thrids_to_update = []
         for msg in data:
             mailid = int(msg.split()[2])
             old_seen = mails_id[mailid]["seen"]
             seen = "\\Seen" in imaplib.ParseFlags(msg)
             if old_seen is not int(seen):
-                app.logger.debug("DIFFERENT for message " + str(mailid) + str(seen) + str(old_seen))
                 self.db.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
+                if not(mails_id[mailid]["thrid"] in thrids_to_update): thrids_to_update.append(mails_id[mailid]["thrid"])
+
+        for thrid in thrids_to_update:
+            cur = self.db.execute('select seen from mails'
+                                 + self._get_where()
+                                 + ' and thrid = ' + str(thrid))
+            seen = True
+            for entry in cur.fetchall():
+                if not entry[0]:
+                    seen = False
+                    break
+            self.db.execute("update threads set seen = " + str(int(seen)) + " where imapid = %s" % (thrid))
         
         self.db.commit()
 
     def load_thread(self, imapid):
-        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen from mails'
-                             + ' where account = \'' + self.get_ns() + '\''
+        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date from mails'
+                             + self._get_where()
                              + ' and thrid = ' + str(imapid))
         
         entries = cur.fetchall()
@@ -169,9 +187,8 @@ class EmailAccount(object):
         return messages, subject
 
     def download_messages(self, start):
-        app.logger.debug("DONWLOAD")
         typ, data = self.imap_mail.uid("fetch", str(start) + ":*",
-                             '(body.peek[header.fields (subject message-id from)] x-gm-thrid flags)')
+                             '(body.peek[header.fields (subject message-id from to date)] x-gm-thrid flags)')
         app.logger.debug("Fetch from %s to *" % (start))
         i = 0
         final = "/" + str(len(data))
@@ -199,49 +216,36 @@ class EmailAccount(object):
             header = parser.parsestr(msg[1])
 
             decoded = decode_header(header["subject"])[0]
-            encodage = "utf-8"
-            if decoded[1] is not None: encodage = decoded[1]
-            try:
-                subject = decoded[0].decode(encodage)
-            except UnicodeDecodeError:
-                subject = decoded[0].decode(chardet.detect(decoded[0])["encoding"])
+            subject = self._decode_full_proof(decoded[0], decoded[1])
 
             email["imapid"] = message_id
             email["subject"] = subject
             email["sender"] = decode_header(header["from"])[0]
-            encodage = "utf-8"
-            if email["sender"][1] is not None: encodage = email["sender"][1]
-            try:
-                email["sender"] = email["sender"][0].decode(encodage)
-            except UnicodeDecodeError:
-                email["sender"] = email["sender"][0].decode(chardet.detect(email["sender"][0])["encoding"])
-            """
-            fulltext = ""
-            try:
-                fulltext = msg[1].decode(chardet.detect(msg[1])["encoding"])
-            except:
-                try:
-                    fulltext = msg[1].decode("utf-8") # sometimes, chardet is just false
-                except:
-                    fulltext = unicode(msg[1], errors="ignore") # ok, let's forgot odd chars
-            """
-            self.db.execute('insert into mails (subject, account, imapid, seen, sender, thrid)'
-                          + ' values (?, ?, ?, ?, ?, ?)',
-                             [email["subject"], self.get_ns (), email["imapid"], seen, email["sender"], thrid])
+            email["sender"] = self._decode_full_proof(email["sender"][0], email["sender"][1])
+            decoded = decode_header(header["to"])[0]
+            to = self._decode_full_proof(decoded[0], decoded[1])
+            decoded = decode_header(header["date"])[0]
+            date = self._decode_full_proof(decoded[0], decoded[1])
+            self.db.execute('insert into mails (subject, account, imapid, seen, sender, thrid, receiver, date)'
+                          + ' values (?, ?, ?, ?, ?, ?, ?, ?)',
+                             [email["subject"], self.get_ns (), email["imapid"], seen, email["sender"], thrid, to, date])
             i += 1
             if i > 500:
                 self.db.commit()
                 i = 0
             cur = self.db.execute('select imapid from threads'
-                                + ' where imapid = \'' + str(thrid) + '\''
-                                + ' and account = \'' + self.get_ns() + '\''
+                                + self._get_where()
                                 + ' limit 1')
             if len(cur.fetchall()) is 0:
                 # We need to add a new thread
-                self.db.execute('insert into threads (subject, imapid, account)'
-                              + ' values (?, ?, ?)',
-                                [email["subject"], thrid, self.get_ns()])
+                self.db.execute('insert into threads (subject, imapid, account, seen)'
+                              + ' values (?, ?, ?, ?)',
+                                [email["subject"], thrid, self.get_ns(), seen])
         self.db.commit()
+
+    def _get_where(self):
+        return ' where account = \'' + self.get_ns() + '\'' + ' and mailbox = \'' + self.mailbox + '\''
+
     
     """
     Return a list with all message from start to end.
@@ -250,7 +254,7 @@ class EmailAccount(object):
     """
     def load_list(self, start, end):
         cur = self.db.execute('select imapid, subject, sender, seen from mails'
-                             + ' where account = \'' + self.get_ns() + '\''
+                             + self._get_where()
                              + ' order by imapid desc limit ' + str(end))
         entries = [dict(imapid=row[0], subject=row[1], sender=row[2], seen=row[3]) for row in cur.fetchall()]
         return entries
@@ -260,7 +264,7 @@ class EmailAccount(object):
     """
     def load_threads(self, start, end):
         cur = self.db.execute('select imapid, subject, seen from threads'
-                             + ' where account = \'' + self.get_ns() + '\''
+                             + self._get_where()
                              + ' order by imapid desc limit ' + str(end))
         entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
         return entries
@@ -288,15 +292,18 @@ class EmailAccount(object):
         return content, maintype
 
     def _decode_full_proof(self, text, encoding):
+        if encoding == None: encoding = "utf-8"
         try:
             text = text.decode(encoding)
         except UnicodeDecodeError:
             try:
-                text = text.decode("utf-8")
+                text = text.decode(chardet.detect(text)["encoding"])
             except UnicodeDecodeError:
-                text = unicode(text, errors_ignore)
+                try:
+                    text = text.decode("utf-8")
+                except UnicodeDecodeError:
+                    text = unicode(text, errors_ignore)
         return text
-
 
 
 def connect_db():
@@ -307,133 +314,6 @@ def init_db():
         with app.open_resource('schema.sql') as f:
             db.cursor().executescript(f.read())
         db.commit()
-            
-
-#def load_imap_account(host, name, password):
-#    mail = imaplib.IMAP4_SSL(host)
-#    mail.login(name, password)
-#    mail.list()
-#    app.logger.debug("load imap")
-#    imap_accounts[name] = mail
-
-#def close_imap_account():
-#    mail.close()
-#    app.logger.debug("close imap")
-#    #mail.logout()
-
-def load_message(mail, mails_id, start, end, database):
-    if start > end:
-        return
-    typ, data = mail.uid("fetch", str(start) + ":" + str(end),
-                         '(body.peek[header.fields (subject message-id from)] x-gm-thrid flags)')
-    app.logger.debug("start: %s, end: %s" % (start, end))
-    for msg in data:
-        if msg[0] == ")":
-            continue
-        email = {}
-        values_split = msg[0].replace("(", "").split()
-        uid_index = values_split.index("UID")
-        thrid_index = values_split.index("X-GM-THRID")
-        #thrid_index = values_split.index("X")
-        message_id = values_split[uid_index+1]
-        thrid = values_split[thrid_index+1]
-        if mails_id.has_key(message_id):
-            continue
-        seen = "\\Seen" in imaplib.ParseFlags(msg[0])
-        email["seen"] = seen
-
-        parser = HeaderParser()
-        header = parser.parsestr(msg[1])
-
-        decoded = decode_header(header["subject"])[0]
-        encodage = "utf-8"
-        if decoded[1] is not None: encodage = decoded[1]
-        subject = decoded[0].decode(encodage)
-
-        email["imapid"] = message_id
-        email["subject"] = subject
-        email["sender"] = decode_header(header["from"])[0]
-        encodage = "utf-8"
-        if email["sender"][1] is not None: encodage = email["sender"][1]
-        email["sender"] = email["sender"][0].decode(encodage)
-        database.execute('insert into mails (subject, account, imapid, seen, sender, thrid)'
-                       + ' values (?, ?, ?, ?, ?, ?)',
-                         [email["subject"], session["email"], email["imapid"], seen, email["sender"], thrid])
-        database.commit()
-        mails_id[message_id] = email
-        cur = database.execute('select imapid from threads'
-                             + ' where imapid = \'' + str(thrid) + '\''
-                             + ' and account = \'' + session["email"] + '\''
-                             + ' limit 1')
-        if len(cur.fetchall()) is 0:
-            # We need to add a new thread
-            database.execute('insert into threads (subject, imapid, account)'
-                       + ' values (?, ?, ?)',
-                         [email["subject"], thrid, session["email"]])
-
-def load_message_with_cache(mail, database, page_size, page):
-    if not app.config["OFFLINE"]:
-        typ, data = mail.uid("search", None, 'ALL')
-
-        # How many messages available?
-        server_imap_ids = data[0].split()
-        server_mail_count = len(server_imap_ids) - 1
-        start_wanted = int(server_imap_ids[max(server_mail_count - (page + 1) * page_size + 1, 0)]) # 100 messages per page
-        end_wanted = int(server_imap_ids[max(server_mail_count - page * page_size, 0)])
-
-        cur = database.execute('select imapid, subject, seen, sender from mails'
-                             + ' where account = \'' + session["email"] + '\''
-                             + ' and imapid >= ' + str(start_wanted)
-                             + ' and imapid <= ' +  str(end_wanted) + ' ORDER by imapid')
-    else:
-        cur = database.execute('select imapid, subject, seen, sender from mails'
-                             + ' where account = \'' + session["email"] + '\''
-                             + ' order by imapid desc limit ' + str(page_size))
-    mails_id = {}
-
-    entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=row[3]) for row in cur.fetchall()]
-
-
-    if not app.config["OFFLINE"]:
-        # So, here, we can:
-        # - have all messages
-        # - have the first messages
-        # - have the last messages
-        # So, we need to do *two* fetchs
-        
-        first_db_id = end_wanted # means we have nothing
-        end_db_id = end_wanted # means we have everything. If we don't have anything, we
-                               # don't need this (only one fetch is required), otherwise,
-                               # it will be set later
-        if len(entries) > 0:
-            first_db_id = entries[0]["imapid"] - 1
-            end_db_id = entries[-1]["imapid"] + 1
-
-        # First fetch from start_wanted to first_db_id (let's hope it is ==)
-        load_message(mail, mails_id, start_wanted, first_db_id, database)
-
-        # Then from end_db_id to end_wanted
-        load_message(mail, mails_id, end_db_id, end_wanted, database)
-
-    # load other mails
-    for entry in entries:
-        mails_id[str(entry["imapid"])] = entry
-    
-    if not app.config["OFFLINE"]:
-        app.logger.debug(str(first_db_id))
-        app.logger.debug(str(end_db_id))
-        typ, data = mail.uid("fetch", str(first_db_id+1) + ":" + str(end_db_id),
-                             '(flags)')
-        for msg in data:
-            mailid = msg.split()[2]
-            old_seen = mails_id[mailid]["seen"]
-            seen = "\\Seen" in imaplib.ParseFlags(msg)
-            if old_seen is not int(seen):
-                app.logger.debug("DIFFERENT for message " + str(mailid) + str(seen) + str(old_seen))
-                database.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
-            mails_id[mailid]["seen"] = seen
-    
-    return mails_id
 
 @app.route("/mails_thread/<imapid>")
 def view_full_thread(imapid):
@@ -536,104 +416,6 @@ def root(page):
         return render_template('email-list.html', page=0, emails=emails_list)
 
 email_accounts = {}
-@app.route("/cache_all")
-def cache_all():
-    mail = None
-    if not session.has_key("email"):
-        return "not logged"
-    if not imap_accounts.has_key(session["email"]):
-        load_imap_account(session["host"], session["email"], session["password"])
-    mail = imap_accounts[session["email"]]
-    # Out: list of "folders" aka labels in gmail.
-    try:
-        mail.select("inbox") # connect to inbox.
-    except imaplib.abort:
-        load_imap_account(session["host"], session["email"], session["password"])
-        mail = imap_accounts[session["email"]]
-        mail.select("inbox") # connect to inbox.
-    
-    database = connect_db()
-    typ, data = mail.uid("fetch", "1:*",
-                         '(body.peek[] x-gm-thrid flags)')
-    
-    # load all the mails from the db
-    cur = database.execute('select imapid from mails where account = \'' + session["email"] + '\'')
-    entries = [row[0] for row in cur.fetchall()]
-    app.logger.debug(str(entries))
-    final = "/" + str(len(data))
-    mails_id = {}
-    import chardet
-
-
-    i = 0
-    for msg in data:
-        if msg[0] == ")":
-            continue
-        email = {}
-        values_split = msg[0].replace("(", "").split()
-        uid_index = values_split.index("UID")
-        thrid_index = values_split.index("X-GM-THRID")
-        #thrid_index = values_split.index("X")
-        message_id = values_split[uid_index+1]
-        app.logger.debug(str(message_id ) + final)
-        if int(message_id) in entries:
-            continue
-        thrid = values_split[thrid_index+1]
-        if mails_id.has_key(message_id):
-            continue
-        seen = "\\Seen" in imaplib.ParseFlags(msg[0])
-        email["seen"] = seen
-
-        parser = HeaderParser()
-        header = parser.parsestr(msg[1])
-
-        decoded = decode_header(header["subject"])[0]
-        encodage = "utf-8"
-        if decoded[1] is not None: encodage = decoded[1]
-        try:
-            subject = decoded[0].decode(encodage)
-        except UnicodeDecodeError:
-            subject = decoded[0].decode(chardet.detect(decoded[0])["encoding"])
-
-        email["imapid"] = message_id
-        email["subject"] = subject
-        email["sender"] = decode_header(header["from"])[0]
-        encodage = "utf-8"
-        if email["sender"][1] is not None: encodage = email["sender"][1]
-        try:
-            email["sender"] = email["sender"][0].decode(encodage)
-        except UnicodeDecodeError:
-            email["sender"] = email["sender"][0].decode(chardet.detect(email["sender"][0])["encoding"])
-        fulltext = ""
-        try:
-            fulltext = msg[1].decode(chardet.detect(msg[1])["encoding"])
-        except:
-            try:
-                fulltext = msg[1].decode("utf-8") # sometimes, chardet is just false
-            except:
-                fulltext = unicode(msg[1], errors="ignore") # ok, let's forgot old chars
-
-        database.execute('insert into mails (subject, account, imapid, seen, sender, thrid, fulltext)'
-                       + ' values (?, ?, ?, ?, ?, ?, ?)',
-                         [email["subject"], session["email"], email["imapid"], seen, email["sender"], thrid, fulltext])
-        i += 1
-        if i > 500:
-            database.commit()
-            i = 0
-        mails_id[message_id] = email
-        cur = database.execute('select imapid from threads'
-                             + ' where imapid = \'' + str(thrid) + '\''
-                             + ' and account = \'' + session["email"] + '\''
-                             + ' limit 1')
-        if len(cur.fetchall()) is 0:
-            # We need to add a new thread
-            database.execute('insert into threads (subject, imapid, account)'
-                       + ' values (?, ?, ?)',
-                         [email["subject"], thrid, session["email"]])
-    database.commit()
-    database.close()
-    return "Sucess"
-
 
 if __name__ == "__main__":
     app.debug = True

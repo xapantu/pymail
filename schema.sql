@@ -8,6 +8,8 @@ create table mails (
     fulltext blob,
     encoding string,
     sender string,
+    receiver string,
+    date string,
     seen integer not null
 );
 

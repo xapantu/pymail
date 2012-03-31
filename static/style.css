@@ -1,4 +1,4 @@
-body            { height:100%; width:100%; position:absolute; margin:0; padding:0; display:block; font-family: sans-serif; background: #eee; }
+body            { font-size:1em; height:100%; width:100%; position:absolute; margin:0; padding:0; display:block; font-family: sans-serif; background: #eee; }
 a, h1, h2       { color: #377BA8; }
 h1, h2          { font-family: 'Georgia', serif; margin: 0; }
 h1              { border-bottom: 2px solid #eee; }
@@ -82,4 +82,16 @@ a:active, a:focus {
 
 #sidebar h4 {
     margin:0.8em;
+}
+
+.message .sender {
+    width:50%;
+    float:left;
+    text-align:left;
+    font-weight:bold;
+}
+.message .date {
+    width:50%;
+    float:left;
+    text-align:right;
 }

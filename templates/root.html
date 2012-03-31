@@ -37,11 +37,11 @@
         </script>
     </head>
     <body>
+        <div id="content">
+            <a href="javascript:sync('{{ mailbox }}')">Sync</a>
         {% for mail in mailboxes %}
             <a href="/threads/{{ mail }}/0">{{ mail }}</a>
         {% endfor %}
-        <div id="content">
-            <a href="javascript:sync('{{ mailbox }}')">Sync</a>
 <div id="sync"></div>
 
         {% block body %}{% endblock %}

@@ -5,7 +5,8 @@ from flask import Flask, render_template, session, request, redirect, url_for, j
 from email.parser import HeaderParser
 from email.header import decode_header
 import email
-from time import strftime
+from email import utils as email_utils
+import time
 import sqlite3
 import imaplib
 from contextlib import closing
@@ -42,7 +43,6 @@ class EmailAccount(object):
 
         for mailbox in mailboxes:
             mb = mailbox.split(" \"")[2].replace("\"", "")
-            app.logger.debug(mailbox)
             if "[Gmail]" not in mb:
                 self._mailboxes.append(mb)
 
@@ -74,6 +74,9 @@ class EmailAccount(object):
 
     def get_ns(self):
         return self.name + ":" + self.host
+
+    def _get_order_by(self):
+        return " order by date desc"
 
     """
     Open the DB, check what is the oldest message we have there, and download all the new ones.
@@ -195,7 +198,7 @@ class EmailAccount(object):
         cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date, mailbox from mails'
                              + " where account = '" + self.get_ns() + "'"
                              + ' and thrid = ' + str(imapid)
-                             + ' order by imapid')
+                             + ' order by date')
         
         entries = cur.fetchall()
         messages = []
@@ -212,6 +215,8 @@ class EmailAccount(object):
         app.logger.debug("Fetch from %s to *" % (start))
         i = 0
         final = "/" + str(len(data))
+        threads_date = {}
+        threads_seen = {}
         for msg in data:
             if msg is None or msg[0] == ")":
                 continue
@@ -223,7 +228,6 @@ class EmailAccount(object):
             thrid_index = values_split.index("X-GM-THRID")
             message_id = values_split[uid_index+1]
             thrid = values_split[thrid_index+1]
-            app.logger.debug(str(message_id) + final)
 
             if int(message_id) < start:
                 continue
@@ -245,24 +249,43 @@ class EmailAccount(object):
             decoded = decode_header(header["to"])[0]
             to = self._decode_full_proof(decoded[0], decoded[1])
             decoded = decode_header(header["date"])[0]
-            date = self._decode_full_proof(decoded[0], decoded[1])
+            date = date = self._decode_full_proof(decoded[0], decoded[1])
+            date = time.strftime("%Y-%m-%d %H:%M:%S", email_utils.parsedate(date))
+
             self.db.execute('insert into mails (subject, account, imapid, seen, sender, thrid, receiver, date, mailbox)'
                           + ' values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                              [email["subject"], self.get_ns (), email["imapid"], seen, email["sender"], thrid, to, date, self.mailbox])
             i += 1
             if i > 500:
                 self.db.commit()
+                app.logger.debug(str(message_id) + final)
                 i = 0
-            cur = self.db.execute('select imapid from threads'
-                                + self._get_where()
+            cur = self.db.execute('select seen from threads'
+                                + self._get_where_no_mb()
                                 + ' and imapid = ' + str(thrid)
                                 + ' limit 1')
-            if len(cur.fetchall()) is 0:
+            thread_db = cur.fetchall()
+            if len(thread_db) is 0:
                 # We need to add a new thread
-                self.db.execute('insert into threads (subject, imapid, account, seen, mailbox)'
-                              + ' values (?, ?, ?, ?, ?)',
-                                [email["subject"], thrid, self.get_ns(), seen, self.mailbox])
+                self.db.execute('insert into threads (subject, imapid, account, seen, mailbox, date)'
+                              + ' values (?, ?, ?, ?, ?, ?)',
+                                [email["subject"], thrid, self.get_ns(), seen, self.mailbox, date])
+            else:
+                if thread_db[0][0] == True and email["seen"] == False:
+                    threads_seen[str(thrid)] = (email["seen"], thrid)
+                threads_date[str(thrid)] = (date, thrid)
         self.db.commit()
+        for th_date in threads_date.values():
+            self.db.execute('update threads set date = \'' + th_date[0] + "'"
+                              + self._get_where_no_mb() + " and imapid = " + str(th_date[1]))
+        for th_date in threads_seen.values():
+            self.db.execute('update threads set seen = ' + str(int(th_date[0]))
+                              + self._get_where_no_mb() + " and imapid = " + str(th_date[1]))
+        self.db.commit()
+    
+    def _get_where_no_mb(self):
+        return ' where account = \'' + self.get_ns() + '\''
+
 
     def _get_where(self):
         return ' where account = \'' + self.get_ns() + '\'' + ' and mailbox = \'' + self.mailbox + '\''
@@ -286,7 +309,8 @@ class EmailAccount(object):
     def load_threads(self, start, end):
         cur = self.db.execute('select imapid, subject, seen from threads'
                              + self._get_where()
-                             + ' order by imapid desc limit %s,%s' % (start, end))
+                             + self._get_order_by()
+                             + ' limit %s,%s' % (start, end))
         entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
         return entries
 
@@ -383,7 +407,12 @@ def view_thread(mailbox, page):
 
 
     app.logger.debug(mailbox)
-    if not session.has_key("email"):
+    if not session.has_key("email") and request.form.has_key("email"):
+        session["email"] = request.form["email"]
+        session["host"] = request.form["host"]
+        session["password"] = request.form["password"]
+        return redirect("/")
+    elif not session.has_key("email"):
         return render_template("login.html")
     else:
         if not email_accounts.has_key(session["email"]):
@@ -396,8 +425,7 @@ def view_thread(mailbox, page):
         mails_id = mail.load_threads(page*100, (page + 1)*100)
         mail.close_db()
         
-        emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
-        return render_template('email-thread.html', page=page, emails=emails_list, mailbox=mailbox, mailboxes=mail.get_mailboxes())
+        return render_template('email-thread.html', page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
 
 @app.route("/sync/<mailbox>")
 def sync(mailbox):

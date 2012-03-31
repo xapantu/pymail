@@ -20,6 +20,7 @@ create table threads (
     subject string not null,
     imapid id not null,
     account string not null,
+    date string,
     mailbox string not null,
     seen integer
 );

@@ -14,10 +14,10 @@
     </a>
     </li>
         {% else %}
-    <li><em>Unbelievable. No entries here so far</em>
+        <li><em>Unbelievable. No entries here so far</em></li>
     {% endfor %}
-    <a href="/{{ page-1}}">&lt;&lt;</a>
-    <a href="/{{ page+1}}">&gt;&gt;</a>
 </ul>
+    <a href="{{ page_back }}">&lt;&lt;</a>
+    <a href="{{ page_next }}">&gt;&gt;</a>
 
 {% endblock %}

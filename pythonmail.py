@@ -106,7 +106,7 @@ class EmailAccount(object):
             message["fulltext"] = self._load_message_body(message["imapid"])
             encoding = chardet.detect(message["fulltext"])["encoding"]
         email_message = email.message_from_string(message["fulltext"].encode(encoding))
-        content = self.get_content_from_message(email_message)
+        content = self.get_content_from_message(email_message)[0]
         message["body"] = content
         return message
 
@@ -128,8 +128,32 @@ class EmailAccount(object):
             entry = cur.fetchall()
             if len(entry) is 0:
                 raise
+
         return self._format_message_from_db_row(entry[0])
-    
+   
+    def update_flags(self, count):
+        cur = self.db.execute('select imapid, seen from mails'
+                             + ' where account = \'' + self.get_ns() + '\''
+                             + ' order by imapid desc limit ' + str(count))
+        entries = [dict(imapid=row[0], seen=row[1]) for row in cur.fetchall()]
+        
+        app.logger.debug("from %s to %s" % (entries[-1]["imapid"], entries[0]["imapid"]))
+        typ, data = self.imap_mail.uid("fetch", str(entries[-1]["imapid"]) + ":" + str(entries[0]["imapid"]),
+                             '(flags)')
+        mails_id = {}
+        for entry in entries:
+            mails_id[entry["imapid"]] = entry
+
+        for msg in data:
+            mailid = int(msg.split()[2])
+            old_seen = mails_id[mailid]["seen"]
+            seen = "\\Seen" in imaplib.ParseFlags(msg)
+            if old_seen is not int(seen):
+                app.logger.debug("DIFFERENT for message " + str(mailid) + str(seen) + str(old_seen))
+                self.db.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
+        
+        self.db.commit()
+
     def load_thread(self, imapid):
         cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen from mails'
                              + ' where account = \'' + self.get_ns() + '\''
@@ -244,18 +268,24 @@ class EmailAccount(object):
     def get_content_from_message(self, message_instance):
         content = ""
         maintype = message_instance.get_content_type()
-        app.logger.debug(maintype)
         encoding = message_instance.get_content_charset("utf-8")
-        if maintype in ("multipart/mixed", "multipart/alternative"): #arg :(
+        if maintype == "multipart/mixed":
             for part in message_instance.get_payload():
-                content += self.get_content_from_message(part)
+                content += self.get_content_from_message(part)[0]
+        elif maintype == "multipart/alternative": #arg :(
+            new_content = ""
+            for part in message_instance.get_payload():
+                new_content = self.get_content_from_message(part)
+                if new_content[1] == "text/html":
+                    break
+            content += new_content[0]
         elif maintype == "text/plain":
             data = message_instance.get_payload(decode=True)
             content += self._decode_full_proof(data, encoding).replace("\n", "<br />")
         elif maintype == "text/html":
             data = message_instance.get_payload(decode=True)
             content += data.decode(encoding)
-        return content
+        return content, maintype
 
     def _decode_full_proof(self, text, encoding):
         try:
@@ -475,6 +505,7 @@ def sync(mailbox):
     mail.open_db()
     mail.load_mailbox(mailbox)
     mail.load_messages()
+    mail.update_flags(100)
     mail.close_db()
     return jsonify(success=True)
 

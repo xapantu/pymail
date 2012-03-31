@@ -1,5 +1,7 @@
 {% extends "root.html" %}
 {% block body %}
+<a href="javascript:sync('inbox')">Sync</a>
+<div id="sync"></div>
 
 <ul class=entries>
     {% for entry in emails %}

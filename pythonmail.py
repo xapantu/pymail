@@ -89,6 +89,27 @@ class EmailAccount(object):
         self.db.commit()
         return msg
 
+    def _format_message_from_db_row(self, entry):
+        message = {}
+        message["imapid"] = entry[0]
+        message["fulltext"] = entry[1]
+        message["encoding"] = entry[2]
+        message["subject"] = entry[3]
+        message["sender"] = entry[4]
+        message["seen"] = True
+
+        encoding = "utf-8" # is this encoding stuff *really* necessary?
+        if message["fulltext"] is not None: # yay, we even have the content!!
+            if message["encoding"] is not None:
+                encoding = message["encoding"]
+        else:
+            message["fulltext"] = self._load_message_body(message["imapid"])
+            encoding = chardet.detect(message["fulltext"])["encoding"]
+        email_message = email.message_from_string(message["fulltext"].encode(encoding))
+        content = self.get_content_from_message(email_message)
+        message["body"] = content
+        return message
+
     """
     Return a dict with the message values (e.g. subject, sender, body...)
     """
@@ -107,25 +128,21 @@ class EmailAccount(object):
             entry = cur.fetchall()
             if len(entry) is 0:
                 raise
-        message = {}
-        message["imapid"] = entry[0][0]
-        message["fulltext"] = entry[0][1]
-        message["encoding"] = entry[0][2]
-        message["subject"] = entry[0][3]
-        message["sender"] = entry[0][4]
-        message["seen"] = True
-
-        encoding = "utf-8" # is this encoding stuff *really* necessary?
-        if message["fulltext"] is not None: # yay, we even have the content!!
-            if message["encoding"] is not None:
-                encoding = message["encoding"]
-        else:
-            message["fulltext"] = self._load_message_body(imapid)
-            encoding = chardet.detect(message["fulltext"])["encoding"]
-        email_message = email.message_from_string(message["fulltext"].encode(encoding))
-        content = get_content_from_message(email_message)
-        message["body"] = content
-        return message
+        return self._format_message_from_db_row(entry[0])
+    
+    def load_thread(self, imapid):
+        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen from mails'
+                             + ' where account = \'' + self.get_ns() + '\''
+                             + ' and thrid = ' + str(imapid))
+        
+        entries = cur.fetchall()
+        messages = []
+        subject = ""
+        for entry in entries:
+            if subject is "":
+                subject = entry[3]
+            messages.append(self._format_message_from_db_row(entry))
+        return messages, subject
 
     def download_messages(self, start):
         app.logger.debug("DONWLOAD")
@@ -213,6 +230,43 @@ class EmailAccount(object):
                              + ' order by imapid desc limit ' + str(end))
         entries = [dict(imapid=row[0], subject=row[1], sender=row[2], seen=row[3]) for row in cur.fetchall()]
         return entries
+    
+    """
+    Return a list with all threads from start to end.
+    """
+    def load_threads(self, start, end):
+        cur = self.db.execute('select imapid, subject, seen from threads'
+                             + ' where account = \'' + self.get_ns() + '\''
+                             + ' order by imapid desc limit ' + str(end))
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
+        return entries
+
+    def get_content_from_message(self, message_instance):
+        content = ""
+        maintype = message_instance.get_content_type()
+        app.logger.debug(maintype)
+        encoding = message_instance.get_content_charset("utf-8")
+        if maintype in ("multipart/mixed", "multipart/alternative"): #arg :(
+            for part in message_instance.get_payload():
+                content += self.get_content_from_message(part)
+        elif maintype == "text/plain":
+            data = message_instance.get_payload(decode=True)
+            content += self._decode_full_proof(data, encoding).replace("\n", "<br />")
+        elif maintype == "text/html":
+            data = message_instance.get_payload(decode=True)
+            content += data.decode(encoding)
+        return content
+
+    def _decode_full_proof(self, text, encoding):
+        try:
+            text = text.decode(encoding)
+        except UnicodeDecodeError:
+            try:
+                text = text.decode("utf-8")
+            except UnicodeDecodeError:
+                text = unicode(text, errors_ignore)
+        return text
+
 
 
 def connect_db():
@@ -287,20 +341,6 @@ def load_message(mail, mails_id, start, end, database):
                        + ' values (?, ?, ?)',
                          [email["subject"], thrid, session["email"]])
 
-def load_threads(mail, database, page_size, page):
-    if app.config["OFFLINE"]:
-        raise("TODO")
-    else:
-        cur = database.execute('select imapid, subject from threads'
-                             + ' where account = \'' + session["email"] + '\''
-                             + ' order by imapid desc limit ' + str(page_size))
-    mails_id = {}
-
-    entries = [dict(imapid=row[0], subject=row[1]) for row in cur.fetchall()]
-    for entry in entries:
-        mails_id[entry["imapid"]] = entry
-    return mails_id
-
 def load_message_with_cache(mail, database, page_size, page):
     if not app.config["OFFLINE"]:
         typ, data = mail.uid("search", None, 'ALL')
@@ -365,48 +405,26 @@ def load_message_with_cache(mail, database, page_size, page):
     
     return mails_id
 
-def get_content_from_message(message_instance):
-    content = ""
-    maintype = message_instance.get_content_type()
-    app.logger.debug(maintype)
-    encoding = message_instance.get_content_charset("utf-8")
-    if maintype in ("multipart/mixed", "multipart/alternative"): #arg :(
-        for part in message_instance.get_payload():
-            content += get_content_from_message(part)
-    elif maintype == "text/plain":
-        data = message_instance.get_payload(decode=True)
-        content += data.decode(encoding).replace("\n", "<br />")
-    elif maintype == "text/html":
-        data = message_instance.get_payload(decode=True)
-        content += data.decode(encoding)
-    return content
-
 @app.route("/mails_thread/<imapid>")
 def view_full_thread(imapid):
-    database = connect_db()
-    cur = database.execute('select imapid from mails'
-                           + ' where account = \'' + session["email"] + '\' and thrid = ' + imapid)
-    app.logger.debug('select imapid from mails'
-                           + ' where account = \'' + session["email"] + '\' and thrid = ' + imapid)
-    entries = [dict(imapid=row[0]) for row in cur.fetchall()]
-    content = "";
-    even = False
-    for entry in entries:
-        app.logger.debug(entry["imapid"])
-        raw = view_mail_raw(entry["imapid"], True, even)
-        if content is "":
-            content += "<h4>" + raw[1]["subject"] + "</h4>"
-        content += raw[0]
-        content += "<div class='clearer'></div>"
-        even = not even
-    return jsonify(message=content)
+    if not session.has_key("email"):
+        return redirect("/")
+    else:
+        if not email_accounts.has_key(session["email"]):
+            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
 
+        mail = email_accounts[session["email"]]
+        mail.open_db()
+        mail.load_mailbox("inbox")
+        messages = mail.load_thread(imapid)
+        mail.close_db()
+        return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1]))
 
 @app.route("/mails/<int:imapid>")
 def view_mail(imapid):
     return jsonify(message=view_mail_raw(imapid))
 
-def view_mail_raw(imapid, threaded = False, even = False):
+def view_mail_raw(imapid):
     if not session.has_key("email"):
         return redirect("/")
     else:
@@ -435,26 +453,30 @@ def view_thread(page):
     if not session.has_key("email"):
         return render_template("login.html")
     else:
-        mail = None
-        if not app.config["OFFLINE"]:
-            if not imap_accounts.has_key(session["email"]):
-                load_imap_account(session["host"], session["email"], session["password"])
-            mail = imap_accounts[session["email"]]
-            # Out: list of "folders" aka labels in gmail.
-            try:
-                mail.select("inbox") # connect to inbox.
-            except imaplib.abort:
-                load_imap_account(session["host"], session["email"], session["password"])
-                mail = imap_accounts[session["email"]]
-                mail.select("inbox") # connect to inbox.
-        database = connect_db()
+        if not email_accounts.has_key(session["email"]):
+            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
 
-        mails_id = load_threads(mail, database, 50, page)
+        mail = email_accounts[session["email"]]
+        mail.open_db()
+        mail.load_mailbox("inbox")
         
-        database.commit()
-        database.close()
-        emails_list = sorted(mails_id.values(), lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
+        mails_id = mail.load_threads(0, 100)
+        mail.close_db()
+        
+        emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
         return render_template('email-thread.html', page=page, emails=emails_list)
+
+@app.route("/sync/<mailbox>")
+def sync(mailbox):
+    if not email_accounts.has_key(session["email"]):
+        email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+
+    mail = email_accounts[session["email"]]
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    mail.load_messages()
+    mail.close_db()
+    return jsonify(success=True)
 
 @app.route("/<int:page>", methods=["GET", "POST"])
 def root(page):
@@ -471,58 +493,18 @@ def root(page):
     elif not session.has_key("email"):
         return render_template("login.html")
     else:
-        mail = None
-        if not app.config["OFFLINE"]:
-            if not imap_accounts.has_key(session["email"]):
-                load_imap_account(session["host"], session["email"], session["password"])
-            mail = imap_accounts[session["email"]]
-            # Out: list of "folders" aka labels in gmail.
-            try:
-                mail.select("inbox") # connect to inbox.
-            except imaplib.abort:
-                load_imap_account(session["host"], session["email"], session["password"])
-                mail = imap_accounts[session["email"]]
-                mail.select("inbox") # connect to inbox.
-        database = connect_db()
-
-        mails_id = load_message_with_cache(mail, database, 50, page)
-        
-        database.commit()
-        database.close()
-        emails_list = sorted(mails_id.values(), lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
-        return render_template('email-list.html', page=page, emails=emails_list)
-
-def get_mail():
-    if not imap_accounts.has_key(session["email"]):
-        load_imap_account(session["host"], session["email"], session["password"])
-    mail = imap_accounts[session["email"]]
-    # Out: list of "folders" aka labels in gmail.
-    try:
-        mail.select("inbox") # connect to inbox.
-    except imaplib.abort:
-        load_imap_account(session["host"], session["email"], session["password"])
-        mail = imap_accounts[session["email"]]
-        mail.select("inbox") # connect to inbox.
-    return mail
-
-email_accounts = {}
-@app.route("/see")
-def see():
-    if not session.has_key("email"):
-        return "not logged"
-    else:
         if not email_accounts.has_key(session["email"]):
             email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
 
         mail = email_accounts[session["email"]]
         mail.open_db()
         mail.load_mailbox("inbox")
-        mail.load_messages()
         mails_id = mail.load_list(0, 100)
         mail.close_db()
         emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
         return render_template('email-list.html', page=0, emails=emails_list)
 
+email_accounts = {}
 @app.route("/cache_all")
 def cache_all():
     mail = None

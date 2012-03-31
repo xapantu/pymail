@@ -17,6 +17,12 @@
                     $("#sidebar").html(data.message);
                 });
             }
+            function sync(mailbox) {
+                $("#sync").html("...");
+                $.getJSON('/sync/' + mailbox, {}, function(data) {
+                    $("#sync").html("Done");
+                });
+            }
             function view_thread(id) {
                 $("#sidebar").html("...");
                 if(!sidebar_view) {

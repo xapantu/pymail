@@ -261,11 +261,12 @@ def view_mail_raw(imapid, threaded = False, even = False):
             else:
                 return render_template("message.html", message=message_tpl, even=even)
         else:
+            mail = get_mail()
             mails_id = {} # not used here, just a simple dict to send to load_message, useless in our case
             load_message(mail, mails_id, imapid, imapid, database)
             database.commit()
             database.close()
-            return view_mail(imapid)
+            return view_mail_raw(imapid)
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -338,6 +339,119 @@ def root(page):
         database.close()
         emails_list = sorted(mails_id.values(), lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
         return render_template('email-list.html', page=page, emails=emails_list)
+
+def get_mail():
+    if not imap_accounts.has_key(session["email"]):
+        load_imap_account(session["host"], session["email"], session["password"])
+    mail = imap_accounts[session["email"]]
+    # Out: list of "folders" aka labels in gmail.
+    try:
+        mail.select("inbox") # connect to inbox.
+    except imaplib.abort:
+        load_imap_account(session["host"], session["email"], session["password"])
+        mail = imap_accounts[session["email"]]
+        mail.select("inbox") # connect to inbox.
+    return mail
+
+
+@app.route("/cache_all")
+def cache_all():
+    mail = None
+    if not session.has_key("email"):
+        return "not logged"
+    if not imap_accounts.has_key(session["email"]):
+        load_imap_account(session["host"], session["email"], session["password"])
+    mail = imap_accounts[session["email"]]
+    # Out: list of "folders" aka labels in gmail.
+    try:
+        mail.select("inbox") # connect to inbox.
+    except imaplib.abort:
+        load_imap_account(session["host"], session["email"], session["password"])
+        mail = imap_accounts[session["email"]]
+        mail.select("inbox") # connect to inbox.
+    
+    database = connect_db()
+    typ, data = mail.uid("fetch", "1:*",
+                         '(body.peek[] x-gm-thrid flags)')
+    
+    # load all the mails from the db
+    cur = database.execute('select imapid from mails where account = \'' + session["email"] + '\'')
+    entries = [row[0] for row in cur.fetchall()]
+    app.logger.debug(str(entries))
+    final = "/" + str(len(data))
+    mails_id = {}
+    import chardet
+
+
+    i = 0
+    for msg in data:
+        if msg[0] == ")":
+            continue
+        email = {}
+        values_split = msg[0].replace("(", "").split()
+        uid_index = values_split.index("UID")
+        thrid_index = values_split.index("X-GM-THRID")
+        #thrid_index = values_split.index("X")
+        message_id = values_split[uid_index+1]
+        app.logger.debug(str(message_id ) + final)
+        if int(message_id) in entries:
+            continue
+        thrid = values_split[thrid_index+1]
+        if mails_id.has_key(message_id):
+            continue
+        seen = "\\Seen" in imaplib.ParseFlags(msg[0])
+        email["seen"] = seen
+
+        parser = HeaderParser()
+        header = parser.parsestr(msg[1])
+
+        decoded = decode_header(header["subject"])[0]
+        encodage = "utf-8"
+        if decoded[1] is not None: encodage = decoded[1]
+        try:
+            subject = decoded[0].decode(encodage)
+        except UnicodeDecodeError:
+            subject = decoded[0].decode(chardet.detect(decoded[0])["encoding"])
+
+        email["imapid"] = message_id
+        email["subject"] = subject
+        email["sender"] = decode_header(header["from"])[0]
+        encodage = "utf-8"
+        if email["sender"][1] is not None: encodage = email["sender"][1]
+        try:
+            email["sender"] = email["sender"][0].decode(encodage)
+        except UnicodeDecodeError:
+            email["sender"] = email["sender"][0].decode(chardet.detect(email["sender"][0])["encoding"])
+        fulltext = ""
+        try:
+            fulltext = msg[1].decode(chardet.detect(msg[1])["encoding"])
+        except:
+            try:
+                fulltext = msg[1].decode("utf-8") # sometimes, chardet is just false
+            except:
+                fulltext = unicode(msg[1], errors="ignore") # ok, let's forgot old chars
+
+        database.execute('insert into mails (subject, account, imapid, seen, sender, thrid, fulltext)'
+                       + ' values (?, ?, ?, ?, ?, ?, ?)',
+                         [email["subject"], session["email"], email["imapid"], seen, email["sender"], thrid, fulltext])
+        i += 1
+        if i > 500:
+            database.commit()
+            i = 0
+        mails_id[message_id] = email
+        cur = database.execute('select imapid from threads'
+                             + ' where imapid = \'' + str(thrid) + '\''
+                             + ' and account = \'' + session["email"] + '\''
+                             + ' limit 1')
+        if len(cur.fetchall()) is 0:
+            # We need to add a new thread
+            database.execute('insert into threads (subject, imapid, account)'
+                       + ' values (?, ?, ?)',
+                         [email["subject"], thrid, session["email"]])
+    database.commit()
+    database.close()
+    return "Sucess"
+
 
 if __name__ == "__main__":
     app.debug = True

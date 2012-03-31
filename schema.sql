@@ -10,7 +10,8 @@ create table mails (
     sender string,
     receiver string,
     date string,
-    seen integer not null
+    seen integer not null,
+    mailbox string not null
 );
 
 drop table if exists threads;
@@ -19,5 +20,6 @@ create table threads (
     subject string not null,
     imapid id not null,
     account string not null,
+    mailbox string not null,
     seen integer
 );

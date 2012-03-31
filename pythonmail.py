@@ -36,9 +36,21 @@ class EmailAccount(object):
     def load_imap_account(self):
         mail = imaplib.IMAP4_SSL(self.host)
         mail.login(self.name, self.password)
-        mail.list()
+        status, mailboxes = mail.list()
+        self._mailboxes = []
+        app.logger.debug(str(mail.namespace()))
+
+        for mailbox in mailboxes:
+            mb = mailbox.split(" \"")[2].replace("\"", "")
+            app.logger.debug(mailbox)
+            if "[Gmail]" not in mb:
+                self._mailboxes.append(mb)
+
         app.logger.debug("load imap accounts")
         self.imap_mail = mail
+
+    def get_mailboxes(self):
+        return self._mailboxes
 
     def open_db(self):
         self.db = sqlite3.connect(self.database_name)
@@ -52,6 +64,7 @@ class EmailAccount(object):
         mail.logout()
 
     def load_mailbox(self, mailbox):
+        mailbox = mailbox.replace("%", "/").replace("&amp;", "&").encode("utf-8")
         self.mailbox = mailbox
         try:
             self.imap_mail.select(mailbox) # connect to inbox.
@@ -67,9 +80,7 @@ class EmailAccount(object):
     """
     def load_messages(self):
         cur = self.db.execute('select imapid from mails'
-                             + ' where account = \'' + self.get_ns() + '\''
                              + self._get_where()
-                             + ' and mailbox = \'' + self.malibox + '\''
                              + ' order by imapid desc limit 1')
         
         last_imapid = 1
@@ -87,7 +98,7 @@ class EmailAccount(object):
     """
     def _load_message_body(self, imapid):
         typ, data = self.imap_mail.uid("fetch", imapid, '(body.peek[])')
-        msg = data[0][1].decode(chardet.detect(data[0][1])["encoding"])
+        msg = self._decode_full_proof(data[0][1], chardet.detect(data[0][1])["encoding"])
         self.db.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(msg,)])
         self.db.commit()
         return msg
@@ -101,14 +112,20 @@ class EmailAccount(object):
         message["sender"] = entry[4]
         message["seen"] = entry[5]
         message["date"] = entry[6]
+        message["mailbox"] = entry[7]
 
         encoding = "utf-8" # is this encoding stuff *really* necessary?
         if message["fulltext"] is not None: # yay, we even have the content!!
             if message["encoding"] is not None:
                 encoding = message["encoding"]
         else:
-            message["fulltext"] = self._load_message_body(message["imapid"])
-            encoding = chardet.detect(message["fulltext"])["encoding"]
+            m = self.mailbox
+            if message["mailbox"] != m:
+                self.load_mailbox(message["mailbox"])
+                message["fulltext"] = self._load_message_body(message["imapid"])
+                self.load_mailbox(m)
+            else:
+                message["fulltext"] = self._load_message_body(message["imapid"])
         email_message = email.message_from_string(message["fulltext"].encode(encoding))
         content = self.get_content_from_message(email_message)[0]
         message["body"] = content
@@ -118,16 +135,14 @@ class EmailAccount(object):
     Return a dict with the message values (e.g. subject, sender, body...)
     """
     def load_message(self, imapid):
-        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date from mails'
-                             + ' where account = \'' + self.get_ns() + '\''
+        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date, mailbox from mails'
                              + self._get_where()
-                             + ' and mailbox = \'' + self.malibox + '\''
                              + ' and imapid = ' + str(imapid))
         
         entry = cur.fetchall()
         if len(entry) is 0:
             self.download_messages(imapid)
-            cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date from mails'
+            cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date, mailbox from mails'
                                  + self._get_where()
                                  + ' and imapid = ' + str(imapid))
             
@@ -143,39 +158,44 @@ class EmailAccount(object):
                              + ' order by imapid desc limit ' + str(count))
         entries = [dict(imapid=row[0], seen=row[1], thrid=row[2]) for row in cur.fetchall()]
         
-        app.logger.debug("from %s to %s" % (entries[-1]["imapid"], entries[0]["imapid"]))
-        typ, data = self.imap_mail.uid("fetch", str(entries[-1]["imapid"]) + ":" + str(entries[0]["imapid"]),
-                             '(flags)')
-        mails_id = {}
-        for entry in entries:
-            mails_id[entry["imapid"]] = entry
 
-        thrids_to_update = []
-        for msg in data:
-            mailid = int(msg.split()[2])
-            old_seen = mails_id[mailid]["seen"]
-            seen = "\\Seen" in imaplib.ParseFlags(msg)
-            if old_seen is not int(seen):
-                self.db.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
-                if not(mails_id[mailid]["thrid"] in thrids_to_update): thrids_to_update.append(mails_id[mailid]["thrid"])
+        if len(entries) > 0:
+            app.logger.debug("from %s to %s" % (entries[-1]["imapid"], entries[0]["imapid"]))
+            typ, data = self.imap_mail.uid("fetch", str(entries[-1]["imapid"]) + ":" + str(entries[0]["imapid"]),
+                                 '(flags)')
+            mails_id = {}
+            for entry in entries:
+                mails_id[entry["imapid"]] = entry
 
-        for thrid in thrids_to_update:
-            cur = self.db.execute('select seen from mails'
-                                 + self._get_where()
-                                 + ' and thrid = ' + str(thrid))
-            seen = True
-            for entry in cur.fetchall():
-                if not entry[0]:
-                    seen = False
-                    break
-            self.db.execute("update threads set seen = " + str(int(seen)) + " where imapid = %s" % (thrid))
-        
-        self.db.commit()
+            thrids_to_update = []
+            for msg in data:
+                mailid = int(msg.split()[2])
+                old_seen = mails_id[mailid]["seen"]
+                seen = "\\Seen" in imaplib.ParseFlags(msg)
+                if old_seen is not int(seen):
+                    self.db.execute("update mails set seen = " + str(int(seen)) + " where imapid = %s" % (mailid))
+                    if not(mails_id[mailid]["thrid"] in thrids_to_update): thrids_to_update.append(mails_id[mailid]["thrid"])
+
+            for thrid in thrids_to_update:
+                cur = self.db.execute('select seen from mails'
+                                     + self._get_where()
+                                     + ' and thrid = ' + str(thrid))
+                seen = True
+                for entry in cur.fetchall():
+                    if not entry[0]:
+                        seen = False
+                        break
+                self.db.execute("update threads set seen = " + str(int(seen)) + " where imapid = %s" % (thrid))
+            
+            self.db.commit()
+        else:
+            app.logger.debug("No mail for this mailbox.")
 
     def load_thread(self, imapid):
-        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date from mails'
-                             + self._get_where()
-                             + ' and thrid = ' + str(imapid))
+        cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date, mailbox from mails'
+                             + " where account = '" + self.get_ns() + "'"
+                             + ' and thrid = ' + str(imapid)
+                             + ' order by imapid')
         
         entries = cur.fetchall()
         messages = []
@@ -193,7 +213,7 @@ class EmailAccount(object):
         i = 0
         final = "/" + str(len(data))
         for msg in data:
-            if msg[0] == ")":
+            if msg is None or msg[0] == ")":
                 continue
             email = {}
 
@@ -226,21 +246,22 @@ class EmailAccount(object):
             to = self._decode_full_proof(decoded[0], decoded[1])
             decoded = decode_header(header["date"])[0]
             date = self._decode_full_proof(decoded[0], decoded[1])
-            self.db.execute('insert into mails (subject, account, imapid, seen, sender, thrid, receiver, date)'
-                          + ' values (?, ?, ?, ?, ?, ?, ?, ?)',
-                             [email["subject"], self.get_ns (), email["imapid"], seen, email["sender"], thrid, to, date])
+            self.db.execute('insert into mails (subject, account, imapid, seen, sender, thrid, receiver, date, mailbox)'
+                          + ' values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                             [email["subject"], self.get_ns (), email["imapid"], seen, email["sender"], thrid, to, date, self.mailbox])
             i += 1
             if i > 500:
                 self.db.commit()
                 i = 0
             cur = self.db.execute('select imapid from threads'
                                 + self._get_where()
+                                + ' and imapid = ' + str(thrid)
                                 + ' limit 1')
             if len(cur.fetchall()) is 0:
                 # We need to add a new thread
-                self.db.execute('insert into threads (subject, imapid, account, seen)'
-                              + ' values (?, ?, ?, ?)',
-                                [email["subject"], thrid, self.get_ns(), seen])
+                self.db.execute('insert into threads (subject, imapid, account, seen, mailbox)'
+                              + ' values (?, ?, ?, ?, ?)',
+                                [email["subject"], thrid, self.get_ns(), seen, self.mailbox])
         self.db.commit()
 
     def _get_where(self):
@@ -255,7 +276,7 @@ class EmailAccount(object):
     def load_list(self, start, end):
         cur = self.db.execute('select imapid, subject, sender, seen from mails'
                              + self._get_where()
-                             + ' order by imapid desc limit ' + str(end))
+                             + ' order by imapid desc limit %s,%s' % (start, end))
         entries = [dict(imapid=row[0], subject=row[1], sender=row[2], seen=row[3]) for row in cur.fetchall()]
         return entries
     
@@ -265,7 +286,7 @@ class EmailAccount(object):
     def load_threads(self, start, end):
         cur = self.db.execute('select imapid, subject, seen from threads'
                              + self._get_where()
-                             + ' order by imapid desc limit ' + str(end))
+                             + ' order by imapid desc limit %s,%s' % (start, end))
         entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
         return entries
 
@@ -315,8 +336,8 @@ def init_db():
             db.cursor().executescript(f.read())
         db.commit()
 
-@app.route("/mails_thread/<imapid>")
-def view_full_thread(imapid):
+@app.route("/mails_thread/<mailbox>/<imapid>")
+def view_full_thread(mailbox, imapid):
     if not session.has_key("email"):
         return redirect("/")
     else:
@@ -325,16 +346,16 @@ def view_full_thread(imapid):
 
         mail = email_accounts[session["email"]]
         mail.open_db()
-        mail.load_mailbox("inbox")
+        mail.load_mailbox(mailbox)
         messages = mail.load_thread(imapid)
         mail.close_db()
         return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1]))
 
-@app.route("/mails/<int:imapid>")
+@app.route("/mails/<mailbox>/<int:imapid>")
 def view_mail(imapid):
-    return jsonify(message=view_mail_raw(imapid))
+    return jsonify(message=view_mail_raw(imapid, mailbox))
 
-def view_mail_raw(imapid):
+def view_mail_raw(imapid, mailbox = "INBOX"):
     if not session.has_key("email"):
         return redirect("/")
     else:
@@ -343,7 +364,7 @@ def view_mail_raw(imapid):
 
         mail = email_accounts[session["email"]]
         mail.open_db()
-        mail.load_mailbox("inbox")
+        mail.load_mailbox(mailbox)
         message = mail.load_message(imapid)
         mail.close_db()
         return render_template("message.html", message=message, even=False)
@@ -351,15 +372,17 @@ def view_mail_raw(imapid):
 
 @app.route("/", methods=["GET", "POST"])
 def start():
-    return root(0)
+    return view_thread("INBOX", 0)
 
-@app.route("/threads/<int:page>")
-def view_thread(page):
+@app.route("/threads/<mailbox>/<int:page>")
+def view_thread(mailbox, page):
     # Several case:
     #   - not logged but he sent the authentification things
     #   - the user is not logged
     #   - logged
 
+
+    app.logger.debug(mailbox)
     if not session.has_key("email"):
         return render_template("login.html")
     else:
@@ -368,13 +391,13 @@ def view_thread(page):
 
         mail = email_accounts[session["email"]]
         mail.open_db()
-        mail.load_mailbox("inbox")
+        mail.load_mailbox(mailbox)
         
-        mails_id = mail.load_threads(0, 100)
+        mails_id = mail.load_threads(page*100, (page + 1)*100)
         mail.close_db()
         
         emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
-        return render_template('email-thread.html', page=page, emails=emails_list)
+        return render_template('email-thread.html', page=page, emails=emails_list, mailbox=mailbox, mailboxes=mail.get_mailboxes())
 
 @app.route("/sync/<mailbox>")
 def sync(mailbox):
@@ -389,8 +412,8 @@ def sync(mailbox):
     mail.close_db()
     return jsonify(success=True)
 
-@app.route("/<int:page>", methods=["GET", "POST"])
-def root(page):
+@app.route("/box/<mailbox>/<int:page>", methods=["GET", "POST"])
+def root(mailbox, page):
     # Several case:
     #   - not logged but he sent the authentification things
     #   - the user is not logged
@@ -409,11 +432,11 @@ def root(page):
 
         mail = email_accounts[session["email"]]
         mail.open_db()
-        mail.load_mailbox("inbox")
-        mails_id = mail.load_list(0, 100)
+        mail.load_mailbox(mailbox)
+        mails_id = mail.load_list(page * 100, (page + 1) * 100)
         mail.close_db()
         emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
-        return render_template('email-list.html', page=0, emails=emails_list)
+        return render_template('email-list.html', page=0, emails=emails_list, mailbox=mailbox)
 
 email_accounts = {}
 

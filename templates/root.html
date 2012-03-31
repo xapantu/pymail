@@ -13,7 +13,7 @@
                     $("#content").css({width:"50%"});
                 }
                 sidebar_view = true;
-                $.getJSON('/mails/' + id, {}, function(data) {
+                $.getJSON('/mails/{{ mailbox }}/' + id, {}, function(data) {
                     $("#sidebar").html(data.message);
                 });
             }
@@ -30,15 +30,18 @@
                     $("#content").css({width:"50%"});
                 }
                 sidebar_view = true;
-                $.getJSON('/mails_thread/' + id, {}, function(data) {
+                $.getJSON('/mails_thread/{{ mailbox }}/' + id, {}, function(data) {
                     $("#sidebar").html(data.message);
                 });
             }
         </script>
     </head>
     <body>
+        {% for mail in mailboxes %}
+            <a href="/threads/{{ mail }}/0">{{ mail }}</a>
+        {% endfor %}
         <div id="content">
-<a href="javascript:sync('inbox')">Sync</a>
+            <a href="javascript:sync('{{ mailbox }}')">Sync</a>
 <div id="sync"></div>
 
         {% block body %}{% endblock %}

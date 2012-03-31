@@ -27,6 +27,8 @@ h2              { font-size: 1.2em; }
 .entries li a span {
     display:block;
     padding: 0.5em;
+    overflow:hidden;
+    text-overflow:ellipsis;
 }
 .entries li a:hover {
     border-top:0.5px #e5e5e5 solid;

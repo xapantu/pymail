@@ -1,23 +1,16 @@
 {% extends "root.html" %}
 {% block body %}
-<ul class=entries>
-    {% for entry in emails %}
-    <li id="entry-{{entry.imapid}}">
-    <a href="javascript:view_thread('{{entry.imapid}}')" class="{{ loop.cycle('odd', 'even') }}">
-        <span>
-            {% if not entry.seen %}
-            <strong>{{ entry.subject }}&nbsp; {{ entry.sender }}</strong>
-            {% else %}
-            {{ entry.subject }}&nbsp; {{ entry.sender }}
-            {% endif %}
-        </span>
-    </a>
-    </li>
-        {% else %}
-        <li><em>Unbelievable. No entries here so far</em></li>
-    {% endfor %}
-</ul>
+<script type="text/javascript">
+    $(document).ready(function() {
+            open_sync("{{ mailbox }}/{{ page }}");
+            sync("{{ mailbox }}");
+    });
+setInterval(function(){
+            sync("{{ mailbox }}");
+        }, 5*60*1000);
+</script>
+<div id="thread-list">
     <a href="{{ page_back }}">&lt;&lt;</a>
     <a href="{{ page_next }}">&gt;&gt;</a>
-
+</div>
 {% endblock %}

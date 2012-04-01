@@ -35,6 +35,7 @@ class EmailAccount(object):
         self.load_imap_account()
     
     def load_imap_account(self):
+        app.logger.debug("LOAD IMAP")
         mail = imaplib.IMAP4_SSL(self.host)
         mail.login(self.name, self.password)
         status, mailboxes = mail.list()
@@ -43,8 +44,7 @@ class EmailAccount(object):
 
         for mailbox in mailboxes:
             mb = mailbox.split(" \"")[2].replace("\"", "")
-            if "[Gmail]" not in mb:
-                self._mailboxes.append(mb)
+            self._mailboxes.append((mb.replace("/", "%"), mb))
 
         app.logger.debug("load imap accounts")
         self.imap_mail = mail
@@ -53,7 +53,9 @@ class EmailAccount(object):
         return self._mailboxes
 
     def open_db(self):
+        app.logger.debug("OPEN DB")
         self.db = sqlite3.connect(self.database_name)
+        app.logger.debug("OPEN DB")
 
     def close_db(self):
         self.db.close()
@@ -239,8 +241,10 @@ class EmailAccount(object):
             parser = HeaderParser()
             header = parser.parsestr(msg[1])
 
-            decoded = decode_header(header["subject"])[0]
-            subject = self._decode_full_proof(decoded[0], decoded[1])
+            decoded = decode_header(header["subject"])
+            subject = ""
+            for decod in decoded:
+                subject += self._decode_full_proof(decod[0], decod[1])
 
             email["imapid"] = message_id
             email["subject"] = subject
@@ -318,7 +322,7 @@ class EmailAccount(object):
         content = ""
         maintype = message_instance.get_content_type()
         encoding = message_instance.get_content_charset("utf-8")
-        if maintype == "multipart/mixed":
+        if maintype in ("multipart/mixed", "multipart/signed"):
             for part in message_instance.get_payload():
                 content += self.get_content_from_message(part)[0]
         elif maintype == "multipart/alternative": #arg :(
@@ -398,6 +402,35 @@ def view_mail_raw(imapid, mailbox = "INBOX"):
 def start():
     return view_thread("INBOX", 0)
 
+@app.route("/ajax/threadslist/<mailbox>/<int:page>")
+def view_thread_list(mailbox, page):
+    # Several case:
+    #   - not logged but he sent the authentification things
+    #   - the user is not logged
+    #   - logged
+
+
+    app.logger.debug(mailbox)
+    if not session.has_key("email") and request.form.has_key("email"):
+        session["email"] = request.form["email"]
+        session["host"] = request.form["host"]
+        session["password"] = request.form["password"]
+        return redirect("/")
+    elif not session.has_key("email"):
+        return render_template("login.html")
+    else:
+        if not email_accounts.has_key(session["email"]):
+            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+
+        mail = email_accounts[session["email"]]
+        mail.open_db()
+        mail.load_mailbox(mailbox)
+        
+        mails_id = mail.load_threads(page*100, (page + 1)*100)
+        mail.close_db()
+        
+        return jsonify(thread_list=render_template('ajax-threads-list.html', emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes()))
+
 @app.route("/threads/<mailbox>/<int:page>")
 def view_thread(mailbox, page):
     # Several case:
@@ -425,7 +458,7 @@ def view_thread(mailbox, page):
         mails_id = mail.load_threads(page*100, (page + 1)*100)
         mail.close_db()
         
-        return render_template('email-thread.html', page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
+        return render_template('email-thread.html', page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), page=page, emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
 
 @app.route("/sync/<mailbox>")
 def sync(mailbox):

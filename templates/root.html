@@ -14,38 +14,51 @@
                 }
                 sidebar_view = true;
                 $.getJSON('/mails/{{ mailbox }}/' + id, {}, function(data) {
-                    $("#sidebar").html(data.message);
+                        $("#sidebar").html(data.message);
+                });
+            }
+            function open_sync(mailbox) {
+                $.getJSON('/ajax/threadslist/' + mailbox, {}, function(data) {
+                        $("#thread-list").html(data.thread_list);
                 });
             }
             function sync(mailbox) {
-                $("#sync").html("...");
+                $("#sync").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
                 $.getJSON('/sync/' + mailbox, {}, function(data) {
-                    $("#sync").html("Done");
-                });
+                        $("#sync").html("");
+                        if(data.success) {
+                            open_sync("{{ mailbox }}/{{ page }}");
+                        }
+                        });
             }
             function view_thread(id) {
-                $("#sidebar").html("...");
+                $("#sidebar").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
                 if(!sidebar_view) {
                     $("#sidebar").css({width:"50%"});
                     $("#content").css({width:"50%"});
                 }
                 sidebar_view = true;
                 $.getJSON('/mails_thread/{{ mailbox }}/' + id, {}, function(data) {
-                    $("#sidebar").html(data.message);
+                        $("#sidebar").html(data.message);
+                        $("#sidebar").scrollTop($("#sidebar")[0].scrollHeight);
                 });
             }
         </script>
     </head>
     <body>
+        <ul id="mailboxes">
+            <li id="sync-item"><a href="javascript:sync('{{ mailbox }}')"><span><div class="sync-text">Sync</div><div id="sync"></div></span></a></li>
+            {% for mail in mailboxes %}
+            <li>
+            <a href="/threads/{{ mail[0] }}/0"><span>{{ mail[1] }}</span></a>
+            </li>
+            {% endfor %}
+        </ul>
         <div id="content">
-            <a href="javascript:sync('{{ mailbox }}')">Sync</a>
-        {% for mail in mailboxes %}
-            <a href="/threads/{{ mail }}/0">{{ mail }}</a>
-        {% endfor %}
-<div id="sync"></div>
-
-        {% block body %}{% endblock %}
-                                                        </div>
+            <div class="list">
+                {% block body %}{% endblock %}
+            </div>
+        </div>
         <div id="sidebar">...</div>
         <div class="clearer"></div>
 

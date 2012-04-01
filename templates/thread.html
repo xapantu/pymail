@@ -1,12 +1,16 @@
 <h4>{{ subject }}</h4>
 {% for message in thread %}
-    <div class="message {{ loop.cycle('message-odd', 'message-even') }}">
+    <div class="message {% if not message.seen %}not-seen{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
+        <div class="header">
         <div class="sender">{{message.sender}}</div>
         <div class="date">{{message.date}}</div>
-        <br />
+        <div class="clearer"></div>
+    </div>
+        <div class="content">
         {% autoescape false %}
         {{message.body}}
         {% endautoescape %}
+    </div>
     </div>
     {% else %}
     Thread empty

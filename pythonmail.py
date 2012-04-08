@@ -28,11 +28,13 @@ imap_accounts = {}
 class EmailAccount(object):
 
     def __init__(self, host, name, password, database_name):
+        self.database_name = database_name
         self.host = host
         self.name = name
         self.password = password
-        self.database_name = database_name
+        self.open_db()
         self.load_imap_account()
+        self.close_db()
     
     def load_imap_account(self):
         app.logger.debug("LOAD IMAP")
@@ -40,14 +42,20 @@ class EmailAccount(object):
         mail.login(self.name, self.password)
         status, mailboxes = mail.list()
         self._mailboxes = []
-        app.logger.debug(str(mail.namespace()))
 
         for mailbox in mailboxes:
+            if "\\Noselect" in mailbox:
+                continue
             mb = mailbox.split(" \"")[2].replace("\"", "")
-            self._mailboxes.append((mb.replace("/", "%"), mb))
+            unread_count = self.get_unread_for_mailbox(mb)
+            self._mailboxes.append((mb.replace("/", "%"), mb, unread_count))
 
         app.logger.debug("load imap accounts")
         self.imap_mail = mail
+
+    def get_unread_for_mailbox(self, mailbox):
+        cur = self.db.execute("select count(imapid) from mails " + self._get_where_no_mb() + " and mailbox = '" + mailbox + "' and seen = 0")
+        return cur.fetchall()[0][0]
 
     def get_mailboxes(self):
         return self._mailboxes
@@ -70,7 +78,7 @@ class EmailAccount(object):
         self.mailbox = mailbox
         try:
             self.imap_mail.select(mailbox) # connect to inbox.
-        except imaplib.abort: # maybe a timeout?
+        except imaplib.error: # maybe a timeout?
             self.load_imap_account()
             self.imap_mail.select(mailbox) # connect to inbox.
 
@@ -264,7 +272,7 @@ class EmailAccount(object):
                 self.db.commit()
                 app.logger.debug(str(message_id) + final)
                 i = 0
-            cur = self.db.execute('select seen from threads'
+            cur = self.db.execute('select seen, mailbox from threads'
                                 + self._get_where_no_mb()
                                 + ' and imapid = ' + str(thrid)
                                 + ' limit 1')
@@ -275,16 +283,19 @@ class EmailAccount(object):
                               + ' values (?, ?, ?, ?, ?, ?)',
                                 [email["subject"], thrid, self.get_ns(), seen, self.mailbox, date])
             else:
-                if thread_db[0][0] == True and email["seen"] == False:
-                    threads_seen[str(thrid)] = (email["seen"], thrid)
-                threads_date[str(thrid)] = (date, thrid)
+                old_seen = thread_db[0][0]
+                index = str(thrid)
+                if threads_date.has_key(index):
+                    old_seen = threads_date[index][1]
+                new_mb = thread_db[0][1]
+                if self.mailbox not in new_mb:
+                    new_mb += "," + self.mailbox
+                threads_date[index] = (date, min(old_seen, int(email["seen"])), new_mb, thrid)
         self.db.commit()
         for th_date in threads_date.values():
-            self.db.execute('update threads set date = \'' + th_date[0] + "'"
-                              + self._get_where_no_mb() + " and imapid = " + str(th_date[1]))
-        for th_date in threads_seen.values():
-            self.db.execute('update threads set seen = ' + str(int(th_date[0]))
-                              + self._get_where_no_mb() + " and imapid = " + str(th_date[1]))
+            self.db.execute('update threads set date = \'' + th_date[0] + "', seen = " + str(th_date[1])
+                          + ', mailbox = \'' + th_date[2] +  '\''
+                              + self._get_where_no_mb() + " and imapid = " + str(th_date[3]))
         self.db.commit()
     
     def _get_where_no_mb(self):
@@ -292,7 +303,7 @@ class EmailAccount(object):
 
 
     def _get_where(self):
-        return ' where account = \'' + self.get_ns() + '\'' + ' and mailbox = \'' + self.mailbox + '\''
+        return ' where account = \'' + self.get_ns() + '\'' + ' and mailbox like \'%' + self.mailbox + '%\''
 
     
     """
@@ -459,6 +470,21 @@ def view_thread(mailbox, page):
         mail.close_db()
         
         return render_template('email-thread.html', page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), page=page, emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
+
+@app.route("/sync")
+def sync_full():
+    if not email_accounts.has_key(session["email"]):
+        email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+
+    mail = email_accounts[session["email"]]
+    mail.open_db()
+    for mb in mail.get_mailboxes():
+        app.logger.debug(mb[0])
+        mail.load_mailbox(mb[0])
+        mail.load_messages()
+        mail.update_flags(100)
+    mail.close_db()
+    return jsonify(success=True)
 
 @app.route("/sync/<mailbox>")
 def sync(mailbox):

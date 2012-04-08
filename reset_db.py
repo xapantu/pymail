@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python2
 import os
 import pythonmail
 os.system("rm email.db")

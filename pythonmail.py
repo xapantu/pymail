@@ -44,7 +44,7 @@ class EmailAccount(object):
         self._mailboxes = []
 
         for mailbox in mailboxes:
-            if "\\Noselect" in mailbox:
+            if "\\Noselect" in mailbox or "Tous les messages" in mailbox:
                 continue
             mb = mailbox.split(" \"")[2].replace("\"", "")
             unread_count = self.get_unread_for_mailbox(mb)
@@ -206,17 +206,34 @@ class EmailAccount(object):
 
     def load_thread(self, imapid):
         cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date, mailbox from mails'
-                             + " where account = '" + self.get_ns() + "'"
+                             + self._get_where()
                              + ' and thrid = ' + str(imapid)
                              + ' order by date')
         
         entries = cur.fetchall()
         messages = []
         subject = ""
+        need_seen_updated = False
         for entry in entries:
             if subject is "":
                 subject = entry[3]
             messages.append(self._format_message_from_db_row(entry))
+            if entry[5] == 0:
+                self.imap_mail.uid("store", entry[0], "+FLAGS", "(\\Seen)")
+                self.db.execute('update mails set seen = 1 ' + self._get_where() + ' and imapid = ' + str(entry[0]))
+                need_seen_updated = True
+                app.logger.debug("need up_")
+
+        self.db.commit()
+        if need_seen_updated:
+            app.logger.debug("need up")
+            count = self.db.execute('select count() from mails' + self._get_where_no_mb() + ' and thrid = ' + str(imapid) + ' and seen = 0').fetchall()[0][0]
+            app.logger.debug(count)
+            if count == 0: # then update the whole thread
+                app.logger.debug("need modification")
+                self.db.execute('update threads set seen = 1 ' + self._get_where_no_mb() + ' and imapid = ' + str(imapid))
+        self.db.commit()
+                
         return messages, subject
 
     def download_messages(self, start):
@@ -437,7 +454,7 @@ def view_thread_list(mailbox, page):
         mail.open_db()
         mail.load_mailbox(mailbox)
         
-        mails_id = mail.load_threads(page*100, (page + 1)*100)
+        mails_id = mail.load_threads(page*100, 100)
         mail.close_db()
         
         return jsonify(thread_list=render_template('ajax-threads-list.html', emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes()))
@@ -466,7 +483,7 @@ def view_thread(mailbox, page):
         mail.open_db()
         mail.load_mailbox(mailbox)
         
-        mails_id = mail.load_threads(page*100, (page + 1)*100)
+        mails_id = mail.load_threads(page*100, 100)
         mail.close_db()
         
         return render_template('email-thread.html', page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), page=page, emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())

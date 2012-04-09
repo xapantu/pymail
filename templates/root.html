@@ -40,7 +40,9 @@
                         }
                         });
             }
+            selected = -1;
             function view_thread(id) {
+                $("#entry-" + selected).removeClass("selected");
                 $("#sidebar").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
                 if(!sidebar_view) {
                     $("#sidebar").css({width:"50%"});
@@ -48,6 +50,8 @@
                 }
                 sidebar_view = true;
                 $.getJSON('/mails_thread/{{ mailbox }}/' + id, {}, function(data) {
+                        $("#entry-" + id).removeClass("unread");
+                        $("#entry-" + selected).addClass("selected");
                         $("#sidebar").html(data.message);
                         $("#sidebar").scrollTop($("#sidebar")[0].scrollHeight);
                 });

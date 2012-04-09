@@ -18,13 +18,13 @@
                 });
             }
             function open_sync(mailbox) {
-                $.getJSON('/ajax/threadslist/' + mailbox, {}, function(data) {
+                $.getJSON('/ajax/threadslist/{{ account }}/' + mailbox, {}, function(data) {
                         $("#thread-list").html(data.thread_list);
                 });
             }
             function sync_full() {
                 $("#sync").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
-                $.getJSON('/sync', {}, function(data) {
+                $.getJSON('/sync/{{ account }}', {}, function(data) {
                         $("#sync").html("");
                         if(data.success) {
                             open_sync("{{ mailbox }}/{{ page }}");
@@ -33,7 +33,7 @@
             }
             function sync(mailbox) {
                 $("#sync").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
-                $.getJSON('/sync/' + mailbox, {}, function(data) {
+                $.getJSON('/sync/{{ account }}/' + mailbox, {}, function(data) {
                         $("#sync").html("");
                         if(data.success) {
                             open_sync("{{ mailbox }}/{{ page }}");
@@ -49,7 +49,7 @@
                     $("#content").css({width:"50%"});
                 }
                 sidebar_view = true;
-                $.getJSON('/mails_thread/{{ mailbox }}/' + id, {}, function(data) {
+                $.getJSON('/ajax/thread/{{ account }}/{{ mailbox }}/' + id, {}, function(data) {
                         $("#entry-" + id).removeClass("unread");
                         $("#entry-" + selected).addClass("selected");
                         $("#sidebar").html(data.message);
@@ -63,7 +63,7 @@
             <li id="sync-item"><a href="javascript:sync_full()"><span><div class="sync-text">Sync</div><div id="sync"></div></span></a></li>
             {% for mail in mailboxes %}
             <li>
-            <a href="/threads/{{ mail[0] }}/0"><span>{{ mail[1] }} {% if mail[2] != 0 %} <strong>({{ mail[2] }})</strong>{% endif %}</span></a>
+            <a href="/threads/{{ account }}/{{ mail[0] }}/0"><span>{{ mail[1] }} {% if mail[2] != 0 %} <strong>({{ mail[2] }})</strong>{% endif %}</span></a>
             </li>
             {% endfor %}
         </ul>

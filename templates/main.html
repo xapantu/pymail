@@ -1,0 +1,26 @@
+{% extends "page.html" %}
+{% block body %}
+
+<div class="page-centered">
+    <div class="header">Choose an account</div>
+    <div class="content">
+<ul class=entries>
+    {% for entry in accounts %}
+    <li><a href="/threads/{{ entry.id }}/INBOX/0">{{ entry.name }} ({{ entry.host }})</a></li>
+    {% else %}
+    No accounts.
+    {% endfor %}
+</ul>
+<form method="POST" action="/">
+    <label>Username:</label>
+    <input type="text" name="email" />
+    <label>Host:</label>
+    <input type="text" name="host" />
+    <label>Password:</label>
+    <input type="password" name="password" />
+    <input type="submit" />
+</form>
+</div>
+</div>
+
+{% endblock %}

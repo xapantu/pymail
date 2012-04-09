@@ -16,7 +16,7 @@ import chardet
 app = Flask(__name__)
 
 
-DATABASE = "email.db"
+DATABASE = "db/main.sqlite"
 DEBUG=True
 SECRET_KEY="ah ah"
 OFFLINE=False
@@ -39,7 +39,7 @@ class EmailAccount(object):
     def load_imap_account(self):
         app.logger.debug("LOAD IMAP")
         mail = imaplib.IMAP4_SSL(self.host)
-        mail.login(self.name, self.password)
+        mail.login(self.name, str(self.password))
         status, mailboxes = mail.list()
         self._mailboxes = []
 
@@ -61,9 +61,7 @@ class EmailAccount(object):
         return self._mailboxes
 
     def open_db(self):
-        app.logger.debug("OPEN DB")
         self.db = sqlite3.connect(self.database_name)
-        app.logger.debug("OPEN DB")
 
     def close_db(self):
         self.db.close()
@@ -388,50 +386,64 @@ def connect_db():
 
 def init_db():
     with closing(connect_db()) as db:
+        with app.open_resource('main.sql') as f:
+            db.cursor().executescript(f.read())
+        db.commit()
+    
+    with closing(sqlite3.connect("db/email.db")) as db:
         with app.open_resource('schema.sql') as f:
             db.cursor().executescript(f.read())
         db.commit()
 
-@app.route("/mails_thread/<mailbox>/<imapid>")
-def view_full_thread(mailbox, imapid):
-    if not session.has_key("email"):
-        return redirect("/")
-    else:
-        if not email_accounts.has_key(session["email"]):
-            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+@app.route("/ajax/thread/<int:account>/<mailbox>/<imapid>")
+def view_full_thread(account, mailbox, imapid):
+    mail = get_mail(account)
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    messages = mail.load_thread(imapid)
+    mail.close_db()
+    return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1]))
 
-        mail = email_accounts[session["email"]]
-        mail.open_db()
-        mail.load_mailbox(mailbox)
-        messages = mail.load_thread(imapid)
-        mail.close_db()
-        return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1]))
+@app.route("/mails/<int:account>/<mailbox>/<int:imapid>")
+def view_mail(account, imapid):
+    return jsonify(message=view_mail_raw(account, imapid, mailbox))
 
-@app.route("/mails/<mailbox>/<int:imapid>")
-def view_mail(imapid):
-    return jsonify(message=view_mail_raw(imapid, mailbox))
+def get_mail(account):
+    if not email_accounts.has_key(account):
+        # Get the password, etc...
+        db = sqlite3.connect(app.config["DATABASE"])
+        cur = db.execute("select  email, password, host from imapaccounts where id = " + str(account))
+        data = cur.fetchall()
+        email_accounts[account] = EmailAccount(data[0][2], data[0][0], data[0][1], "db/email.db")
+        db.close()
 
-def view_mail_raw(imapid, mailbox = "INBOX"):
-    if not session.has_key("email"):
-        return redirect("/")
-    else:
-        if not email_accounts.has_key(session["email"]):
-            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+    mail = email_accounts[account]
+    return mail
 
-        mail = email_accounts[session["email"]]
-        mail.open_db()
-        mail.load_mailbox(mailbox)
-        message = mail.load_message(imapid)
-        mail.close_db()
-        return render_template("message.html", message=message, even=False)
+def view_mail_raw(account, imapid, mailbox = "INBOX"):
+    mail = get_mail(account)
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    message = mail.load_message(imapid)
+    mail.close_db()
+    return render_template("message.html", message=message, even=False)
 
 
 @app.route("/", methods=["GET", "POST"])
 def start():
-    return view_thread("INBOX", 0)
+    db = sqlite3.connect(app.config["DATABASE"])
+    if request.form.has_key("email"):
+        db.execute("insert into imapaccounts (email, password, host) values (?, ?, ?)",
+                [request.form["email"], request.form["password"], request.form["host"]])
+        db.commit()
+    cur = db.execute("select id, email, host from imapaccounts")
+    entries = [dict(id=row[0], name=row[1], host=row[2]) for row in cur.fetchall()]
+    db.close()
+    return render_template("main.html", accounts=entries)
+    #return view_thread("INBOX", 0)
 
-@app.route("/ajax/threadslist/<mailbox>/<int:page>")
-def view_thread_list(mailbox, page):
+@app.route("/ajax/threadslist/<int:account>/<mailbox>/<int:page>")
+def view_thread_list(account, mailbox, page):
     # Several case:
     #   - not logged but he sent the authentification things
     #   - the user is not logged
@@ -439,61 +451,36 @@ def view_thread_list(mailbox, page):
 
 
     app.logger.debug(mailbox)
-    if not session.has_key("email") and request.form.has_key("email"):
-        session["email"] = request.form["email"]
-        session["host"] = request.form["host"]
-        session["password"] = request.form["password"]
-        return redirect("/")
-    elif not session.has_key("email"):
-        return render_template("login.html")
-    else:
-        if not email_accounts.has_key(session["email"]):
-            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+    
+    mail = get_mail(account)
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    
+    mails_id = mail.load_threads(page*100, 100)
+    mail.close_db()
+    
+    return jsonify(thread_list=render_template('ajax-threads-list.html', emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes()))
 
-        mail = email_accounts[session["email"]]
-        mail.open_db()
-        mail.load_mailbox(mailbox)
-        
-        mails_id = mail.load_threads(page*100, 100)
-        mail.close_db()
-        
-        return jsonify(thread_list=render_template('ajax-threads-list.html', emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes()))
-
-@app.route("/threads/<mailbox>/<int:page>")
-def view_thread(mailbox, page):
+@app.route("/threads/<int:account>/<mailbox>/<int:page>")
+def view_thread(account, mailbox, page):
     # Several case:
     #   - not logged but he sent the authentification things
     #   - the user is not logged
     #   - logged
 
 
-    app.logger.debug(mailbox)
-    if not session.has_key("email") and request.form.has_key("email"):
-        session["email"] = request.form["email"]
-        session["host"] = request.form["host"]
-        session["password"] = request.form["password"]
-        return redirect("/")
-    elif not session.has_key("email"):
-        return render_template("login.html")
-    else:
-        if not email_accounts.has_key(session["email"]):
-            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
+    mail = get_mail(account)
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    
+    mails_id = mail.load_threads(page*100, 100)
+    mail.close_db()
+    
+    return render_template('email-thread.html', account=account, page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), page=page, emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
 
-        mail = email_accounts[session["email"]]
-        mail.open_db()
-        mail.load_mailbox(mailbox)
-        
-        mails_id = mail.load_threads(page*100, 100)
-        mail.close_db()
-        
-        return render_template('email-thread.html', page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), page=page, emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
-
-@app.route("/sync")
-def sync_full():
-    if not email_accounts.has_key(session["email"]):
-        email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
-
-    mail = email_accounts[session["email"]]
+@app.route("/sync/<int:account>/")
+def sync_full(account):
+    mail = get_mail(account)
     mail.open_db()
     for mb in mail.get_mailboxes():
         app.logger.debug(mb[0])
@@ -503,12 +490,9 @@ def sync_full():
     mail.close_db()
     return jsonify(success=True)
 
-@app.route("/sync/<mailbox>")
-def sync(mailbox):
-    if not email_accounts.has_key(session["email"]):
-        email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
-
-    mail = email_accounts[session["email"]]
+@app.route("/sync/<int:account>/<mailbox>")
+def sync(account, mailbox):
+    mail = get_mail(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     mail.load_messages()
@@ -516,31 +500,20 @@ def sync(mailbox):
     mail.close_db()
     return jsonify(success=True)
 
-@app.route("/box/<mailbox>/<int:page>", methods=["GET", "POST"])
-def root(mailbox, page):
+@app.route("/box/<int:account>/<mailbox>/<int:page>", methods=["GET", "POST"])
+def root(account, mailbox, page):
     # Several case:
     #   - not logged but he sent the authentification things
     #   - the user is not logged
     #   - logged
 
-    if not session.has_key("email") and request.form.has_key("email"):
-        session["email"] = request.form["email"]
-        session["host"] = request.form["host"]
-        session["password"] = request.form["password"]
-        return redirect("/")
-    elif not session.has_key("email"):
-        return render_template("login.html")
-    else:
-        if not email_accounts.has_key(session["email"]):
-            email_accounts[session["email"]] = EmailAccount(session["host"], session["email"], session["password"], "email.db")
-
-        mail = email_accounts[session["email"]]
-        mail.open_db()
-        mail.load_mailbox(mailbox)
-        mails_id = mail.load_list(page * 100, (page + 1) * 100)
-        mail.close_db()
-        emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
-        return render_template('email-list.html', page=0, emails=emails_list, mailbox=mailbox)
+    mail = get_mail(account)
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    mails_id = mail.load_list(page * 100, (page + 1) * 100)
+    mail.close_db()
+    emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
+    return render_template('email-list.html', page=0, emails=emails_list, mailbox=mailbox)
 
 email_accounts = {}
 

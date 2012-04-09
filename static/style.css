@@ -1,4 +1,4 @@
-body            { font-size:1em; height:100%; width:100%; position:absolute; margin:0; padding:0; display:block; font-family: sans-serif; background: #edeeec; }
+body            { font-size:1em; height:100%; width:100%; position:absolute; margin:0; padding:0; display:block; font-family: sans-serif; background: #fff; }
 a, h1, h2       { color: #377BA8; }
 h1, h2          { font-family: 'Georgia', serif; margin: 0; }
 h1              { border-bottom: 2px solid #eee; }
@@ -73,10 +73,11 @@ a:active, a:focus {
 .clearer {
   clear:both;
 }
-
-.message {
+.message {    
     margin:0.5em;
+}
 
+.message, .page-centered {
     background-color:#fdfdfd;
     border-radius:4px;
     box-shadow: 0 0 1.5px 1.5px #eee;
@@ -91,7 +92,7 @@ a:active, a:focus {
 .message.not-seen .sender {
     font-weight:bold;
 }
-.message .header {
+.message .header, .page-centered .header {
     background-color:#f2f2f0;
     padding:0.5em;
     border-radius:4px;
@@ -99,7 +100,7 @@ a:active, a:focus {
     box-shadow: 0px 1px 1px 0px #eee;
 }
 
-.message .content {
+.message .content, .page-centered .content {
     padding:1em;
 }
 
@@ -168,4 +169,14 @@ a:active, a:focus {
 
 li.unread {
 font-weight:bold;
+}
+
+.page-centered {
+    margin-top:-10em;
+    margin-left:-250px;
+    width:500px;
+    height:20em;
+    position:absolute;
+    left:50%;
+    top:50%;
 }

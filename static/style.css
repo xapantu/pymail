@@ -180,3 +180,8 @@ font-weight:bold;
     left:50%;
     top:50%;
 }
+
+.selected a {
+background: url("triangle.png") right center no-repeat;
+background-size:1em 2em;
+}

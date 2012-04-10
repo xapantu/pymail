@@ -49,6 +49,7 @@
                     $("#content").css({width:"50%"});
                 }
                 sidebar_view = true;
+                selected = id;
                 $.getJSON('/ajax/thread/{{ account }}/{{ mailbox }}/' + id, {}, function(data) {
                         $("#entry-" + id).removeClass("unread");
                         $("#entry-" + selected).addClass("selected");

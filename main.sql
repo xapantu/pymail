@@ -10,5 +10,6 @@ create table imapaccounts (
     accountid integer,
     email string not null,
     password string not null,
-    host string not null
+    host string not null,
+    mailboxes_synced string not null
 );

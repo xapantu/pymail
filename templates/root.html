@@ -57,10 +57,23 @@
                         $("#sidebar").scrollTop($("#sidebar")[0].scrollHeight);
                 });
             }
+            function popup_block(target) {
+                $("#popup-block-content").html("");
+                $("#popup-block-header").html("Loading...");
+                $("#popup-background").show();
+                $.getJSON(target, {}, function(data) {
+                    $("#popup-block-content").html(data.content);
+                    $("#popup-block-header").html(data.title);
+                });
+            }
+            function close_popup() {
+                $("#popup-background").hide();
+            }
         </script>
     </head>
     <body>
         <ul id="mailboxes">
+            <li id="settings-item"><a href="javascript:popup_block('/settings/account/{{ account }}')">Settings</a></li>
             <li id="sync-item"><a href="javascript:sync_full()"><span><div class="sync-text">Sync</div><div id="sync"></div></span></a></li>
             {% for mail in mailboxes %}
             <li>
@@ -75,6 +88,12 @@
         </div>
         <div id="sidebar">...</div>
         <div class="clearer"></div>
+        <div id="popup-background">
+            <div id="popup-block" class="page-centered">
+                <div class="header"><span id="popup-block-header">Loading...</span><a id="popup-block-close" href="javascript:close_popup()">X</a></div>
+                <div class="content" id="popup-block-content">...</div>
+            </div>
+        </div>
 
     </body>
 </html>

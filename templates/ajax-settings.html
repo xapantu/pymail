@@ -1,0 +1,7 @@
+<h4>Synced Mailboxes:</h4>
+<form>
+{% for mb in all_mailboxes %}
+<input type="checkbox" name="{{ mb[1] }}" {% if not (mb[1] in unselected_mailboxes) %} checked {% endif %} id="{{ mb[1] }}" /><label for="{{mb[1]}}">{{ mb[1] }}</label>
+<br />
+{% endfor %}
+</form>

@@ -171,7 +171,7 @@ li.unread {
 font-weight:bold;
 }
 
-.page-centered {
+.centered-vertical {
     margin-top:-10em;
     margin-left:-250px;
     width:500px;
@@ -184,4 +184,49 @@ font-weight:bold;
 .selected a {
 background: url("triangle.png") right center no-repeat;
 background-size:1em 2em;
+}
+
+#popup-background {
+    position:absolute;
+    top:0;
+    left:0;
+    z-index:2;
+    background-size:100px 100px;
+    background-color: rgba(200, 200, 200, .95);
+    /*background-image: linear-gradient(rgba(255, 255, 255, .2) 50%, transparent 50%, transparent);*/
+    /* http://lea.verou.me/demos/css3-patterns.html */
+    background-image: -moz-linear-gradient(-45deg, rgba(255, 255, 255, 0.2) 25%, rgba(205, 205, 205, 0.28) 25%, rgba(205, 205, 205, 0.28) 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%,rgba(205, 205, 205, 0.28) 75%, rgba(205, 205, 205, 0.28));
+    /*background-color:black;*/
+    width:100%;
+    height:100%;
+    display:none;
+}
+
+#popup-block {
+    width:50%;
+    margin:auto;
+    margin-top:4em;
+    /*background-color:#000;*/
+}
+
+#popup-block-close {
+    float:right;
+    display:block;
+    font-weight:bold;
+    text-decoration:none;
+    height:1em;
+    width:1em;
+    text-align:center;
+}
+
+h4 {
+    margin:0;
+    margin-bottom:0.2em;
+    font-weight:normal;
+    font-size:1.1em;
+    margin-left:-0.5em;
+}
+
+#popup-block-content {
+    margin-left:0.5em;
 }

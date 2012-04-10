@@ -27,8 +27,9 @@ imap_accounts = {}
 
 class EmailAccount(object):
 
-    def __init__(self, host, name, password, database_name):
+    def __init__(self, host, name, password, database_name, mailboxes_synced):
         self.database_name = database_name
+        self.mailboxes_synced = mailboxes_synced
         self.host = host
         self.name = name
         self.password = password
@@ -42,11 +43,16 @@ class EmailAccount(object):
         mail.login(self.name, str(self.password))
         status, mailboxes = mail.list()
         self._mailboxes = []
+        self._all_mailboxes = []
+        self._unselected_mailboxes = []
 
         for mailbox in mailboxes:
             if "\\Noselect" in mailbox or "Tous les messages" in mailbox:
                 continue
             mb = mailbox.split(" \"")[2].replace("\"", "")
+            self._all_mailboxes.append((mb.replace("/", "%"), mb))
+            if mb not in self.mailboxes_synced:
+                self._unselected_mailboxes.append(mb)
             unread_count = self.get_unread_for_mailbox(mb)
             self._mailboxes.append((mb.replace("/", "%"), mb, unread_count))
 
@@ -56,6 +62,12 @@ class EmailAccount(object):
     def get_unread_for_mailbox(self, mailbox):
         cur = self.db.execute("select count(imapid) from mails " + self._get_where_no_mb() + " and mailbox = '" + mailbox + "' and seen = 0")
         return cur.fetchall()[0][0]
+
+    def get_unselected_mailboxes(self):
+        return self._unselected_mailboxes
+    
+    def get_all_mailboxes(self):
+        return self._all_mailboxes
 
     def get_mailboxes(self):
         return self._mailboxes
@@ -397,31 +409,39 @@ def init_db():
 
 @app.route("/ajax/thread/<int:account>/<mailbox>/<imapid>")
 def view_full_thread(account, mailbox, imapid):
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     messages = mail.load_thread(imapid)
     mail.close_db()
     return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1]))
 
+@app.route("/settings/account/<int:account>/")
+def settings_account(account):
+    mail = get_mail_instance(account)
+    all_mb = mail.get_all_mailboxes()
+    unselected_mb = mail.get_unselected_mailboxes()
+    content = render_template("ajax-settings.html", name=mail.name, host=mail.host, all_mailboxes=all_mb, unselected_mailboxes=unselected_mb)
+    return jsonify(content=content, title="Settings of %s (%s)" % (mail.name, mail.host))
+
 @app.route("/mails/<int:account>/<mailbox>/<int:imapid>")
 def view_mail(account, imapid):
     return jsonify(message=view_mail_raw(account, imapid, mailbox))
 
-def get_mail(account):
+def get_mail_instance(account):
     if not email_accounts.has_key(account):
         # Get the password, etc...
         db = sqlite3.connect(app.config["DATABASE"])
-        cur = db.execute("select  email, password, host from imapaccounts where id = " + str(account))
+        cur = db.execute("select  email, password, host, mailboxes_synced from imapaccounts where id = " + str(account))
         data = cur.fetchall()
-        email_accounts[account] = EmailAccount(data[0][2], data[0][0], data[0][1], "db/email.db")
+        email_accounts[account] = EmailAccount(data[0][2], data[0][0], data[0][1], "db/email.db", data[0][3].split("%"))
         db.close()
 
     mail = email_accounts[account]
     return mail
 
 def view_mail_raw(account, imapid, mailbox = "INBOX"):
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     message = mail.load_message(imapid)
@@ -433,14 +453,13 @@ def view_mail_raw(account, imapid, mailbox = "INBOX"):
 def start():
     db = sqlite3.connect(app.config["DATABASE"])
     if request.form.has_key("email"):
-        db.execute("insert into imapaccounts (email, password, host) values (?, ?, ?)",
+        db.execute("insert into imapaccounts (email, password, host, mailboxes_synced) values (?, ?, ?, 'INBOX')",
                 [request.form["email"], request.form["password"], request.form["host"]])
         db.commit()
     cur = db.execute("select id, email, host from imapaccounts")
     entries = [dict(id=row[0], name=row[1], host=row[2]) for row in cur.fetchall()]
     db.close()
     return render_template("main.html", accounts=entries)
-    #return view_thread("INBOX", 0)
 
 @app.route("/ajax/threadslist/<int:account>/<mailbox>/<int:page>")
 def view_thread_list(account, mailbox, page):
@@ -452,14 +471,18 @@ def view_thread_list(account, mailbox, page):
 
     app.logger.debug(mailbox)
     
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     
     mails_id = mail.load_threads(page*100, 100)
     mail.close_db()
     
-    return jsonify(thread_list=render_template('ajax-threads-list.html', emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes()))
+    return jsonify(thread_list=render_template('ajax-threads-list.html',
+                                    emails=mails_id,
+                                    mailbox=mailbox,
+                                    mailboxes=mail.get_mailboxes())
+                  )
 
 @app.route("/threads/<int:account>/<mailbox>/<int:page>")
 def view_thread(account, mailbox, page):
@@ -469,18 +492,25 @@ def view_thread(account, mailbox, page):
     #   - logged
 
 
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     
     mails_id = mail.load_threads(page*100, 100)
     mail.close_db()
     
-    return render_template('email-thread.html', account=account, page_next="/threads/" + mailbox + "/" + str(int(page) + 1), page_back="/threads/" + mailbox + "/" + str(int(page) - 1), page=page, emails=mails_id, mailbox=mailbox, mailboxes=mail.get_mailboxes())
+    return render_template('email-thread.html',
+            account=account,
+            page_next="/threads/" + mailbox + "/" + str(int(page) + 1),
+            page_back="/threads/" + mailbox + "/" + str(int(page) - 1),
+            page=page,
+            emails=mails_id,
+            mailbox=mailbox,
+            mailboxes=mail.get_mailboxes())
 
 @app.route("/sync/<int:account>/")
 def sync_full(account):
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     for mb in mail.get_mailboxes():
         app.logger.debug(mb[0])
@@ -492,7 +522,7 @@ def sync_full(account):
 
 @app.route("/sync/<int:account>/<mailbox>")
 def sync(account, mailbox):
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     mail.load_messages()
@@ -507,7 +537,7 @@ def root(account, mailbox, page):
     #   - the user is not logged
     #   - logged
 
-    mail = get_mail(account)
+    mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     mails_id = mail.load_list(page * 100, (page + 1) * 100)

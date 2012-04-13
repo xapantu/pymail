@@ -23,18 +23,18 @@
                 });
             }
             function sync_full() {
-                $("#sync").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
+                $("#sync-img").attr("src", "{{ url_for('static', filename='img/loading32.gif') }}");
                 $.getJSON('/sync/{{ account }}', {}, function(data) {
-                        $("#sync").html("");
+                        $("#sync-img").attr("src", "{{ url_for('static', filename='img/view-refresh.png') }}");
                         if(data.success) {
                             open_sync("{{ mailbox }}/{{ page }}");
                         }
                         });
             }
             function sync(mailbox) {
-                $("#sync").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
+                $("#sync-img").attr("src", "{{ url_for('static', filename='img/loading32.gif') }}");
                 $.getJSON('/sync/{{ account }}/' + mailbox, {}, function(data) {
-                        $("#sync").html("");
+                        $("#sync-img").attr("src", "{{ url_for('static', filename='img/view-refresh.png') }}");
                         if(data.success) {
                             open_sync("{{ mailbox }}/{{ page }}");
                         }
@@ -73,8 +73,23 @@
     </head>
     <body>
         <ul id="mailboxes">
-            <li id="settings-item"><a href="javascript:popup_block('/settings/account/{{ account }}')"><span>Settings</a></span></li>
-            <li id="sync-item"><a href="javascript:sync_full()"><span><div class="sync-text">Sync</div><div id="sync"></div></span></a></li>
+            <li id="settings-item" class="inline">
+                <a href="javascript:popup_block('/settings/account/{{ account }}')">
+                    <img src="{{ url_for('static', filename='img/preferences-desktop.png') }}" />
+                </a>
+                <a href="javascript:sync_full()">
+                    <img id="sync-img" src="{{ url_for('static', filename='img/view-refresh.png') }}" />
+                </a>
+                <div class="dropdown"><div>
+                <a href="#">{{ accountname }}</a>
+                <ul class="dropdown">
+                    <li>Item 1</li>
+                    <li>Item 2</li>
+                </ul>
+            </div>
+            </div>
+                <div class="clearer"></div>
+            </li>
             {% for mail in mailboxes %}
             <li {% if mail == mailbox %}class="selected"{% endif %}>
                 <a href="/threads/{{ account }}/{{ mail }}/0">

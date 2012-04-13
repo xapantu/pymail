@@ -91,7 +91,7 @@ class EmailAccount(object):
         self.mailbox = mailbox
         try:
             self.imap_mail.select(mailbox) # connect to inbox.
-        except imaplib.error: # maybe a timeout?
+        except imaplib.IMAP4.error: # maybe a timeout?
             self.load_imap_account()
             self.imap_mail.select(mailbox) # connect to inbox.
 
@@ -540,6 +540,7 @@ def view_thread(account, mailbox, page):
     
     return render_template('email-thread.html',
             account=account,
+            accountname=mail.name,
             page_next="/threads/" + mailbox + "/" + str(int(page) + 1),
             page_back="/threads/" + mailbox + "/" + str(int(page) - 1),
             page=page,

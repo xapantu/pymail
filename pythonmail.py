@@ -41,23 +41,26 @@ class EmailAccount(object):
         app.logger.debug("LOAD IMAP")
         mail = imaplib.IMAP4_SSL(self.host)
         mail.login(self.name, str(self.password))
-        status, mailboxes = mail.list()
+        self.imap_mail = mail
+        self.list_mailboxes()
+
+    def list_mailboxes(self):
+        status, mailboxes = self.imap_mail.list()
         self._mailboxes = []
         self._all_mailboxes = []
         self._unselected_mailboxes = []
 
         for mailbox in mailboxes:
-            if "\\Noselect" in mailbox or "Tous les messages" in mailbox:
+            if "\\Noselect" in mailbox:
                 continue
             mb = mailbox.split(" \"")[2].replace("\"", "")
             self._all_mailboxes.append((mb.replace("/", "%"), mb))
             if mb not in self.mailboxes_synced:
                 self._unselected_mailboxes.append(mb)
-            unread_count = self.get_unread_for_mailbox(mb)
+            unread_count = 0 #self.get_unread_for_mailbox(mb)
             self._mailboxes.append((mb.replace("/", "%"), mb, unread_count))
 
         app.logger.debug("load imap accounts")
-        self.imap_mail = mail
 
     def get_unread_for_mailbox(self, mailbox):
         cur = self.db.execute("select count(imapid) from mails " + self._get_where_no_mb() + " and mailbox = '" + mailbox + "' and seen = 0")
@@ -392,6 +395,12 @@ class EmailAccount(object):
                     text = unicode(text, errors_ignore)
         return text
 
+    def sync_all(self):
+        for mb in self.mailboxes_synced:
+            self.load_mailbox(mb)
+            self.load_messages()
+            self.update_flags(500)
+
 
 def connect_db():
     return sqlite3.connect(app.config['DATABASE'])
@@ -421,12 +430,19 @@ def settings_account(account):
     mail = get_mail_instance(account)
     all_mb = mail.get_all_mailboxes()
     unselected_mb = mail.get_unselected_mailboxes()
-    content = render_template("ajax-settings.html", name=mail.name, host=mail.host, all_mailboxes=all_mb, unselected_mailboxes=unselected_mb)
+    content = render_template("ajax-settings.html", account=account, name=mail.name, host=mail.host, all_mailboxes=all_mb, unselected_mailboxes=unselected_mb)
     return jsonify(content=content, title="Settings of %s (%s)" % (mail.name, mail.host))
 
 @app.route("/mails/<int:account>/<mailbox>/<int:imapid>")
 def view_mail(account, imapid):
     return jsonify(message=view_mail_raw(account, imapid, mailbox))
+
+def remove_empty_elements(array):
+    next_array = []
+    for a in array:
+        if a != "":
+            next_array.append(a)
+    return next_array
 
 def get_mail_instance(account):
     if not email_accounts.has_key(account):
@@ -434,7 +450,7 @@ def get_mail_instance(account):
         db = sqlite3.connect(app.config["DATABASE"])
         cur = db.execute("select  email, password, host, mailboxes_synced from imapaccounts where id = " + str(account))
         data = cur.fetchall()
-        email_accounts[account] = EmailAccount(data[0][2], data[0][0], data[0][1], "db/email.db", data[0][3].split("%"))
+        email_accounts[account] = EmailAccount(data[0][2], data[0][0], data[0][1], "db/email.db", remove_empty_elements(data[0][3].split(";")))
         db.close()
 
     mail = email_accounts[account]
@@ -453,7 +469,7 @@ def view_mail_raw(account, imapid, mailbox = "INBOX"):
 def start():
     db = sqlite3.connect(app.config["DATABASE"])
     if request.form.has_key("email"):
-        db.execute("insert into imapaccounts (email, password, host, mailboxes_synced) values (?, ?, ?, 'INBOX')",
+        db.execute("insert into imapaccounts (email, password, host, mailboxes_synced) values (?, ?, ?, ';INBOX;')",
                 [request.form["email"], request.form["password"], request.form["host"]])
         db.commit()
     cur = db.execute("select id, email, host from imapaccounts")
@@ -484,6 +500,29 @@ def view_thread_list(account, mailbox, page):
                                     mailboxes=mail.get_mailboxes())
                   )
 
+@app.route("/ajax/settings/<int:account>/<key>/<value>")
+def set_settings(account, key, value):
+    keys = key.split(";")
+    db = sqlite3.connect(app.config["DATABASE"])
+    mail = get_mail_instance(account)
+    if keys[0] == "mailbox":
+        mailbox = keys[1]
+        if mailbox is not "" and (value == "1" or value == "0"):
+            # Get the current synced mailboxes
+            cur = db.execute("select  mailboxes_synced from imapaccounts where id = " + str(account))
+            data = cur.fetchall()
+            mailboxes_synced = data[0][0]
+            if value == "1":
+                mailboxes_synced = mailboxes_synced + mailbox + ";"
+            else:
+                mailboxes_synced = mailboxes_synced.replace(mailbox + ";", "")
+            mail.mailboxes_synced = remove_empty_elements(mailboxes_synced.split(";"))
+            mail.list_mailboxes()
+            db.execute("update imapaccounts set mailboxes_synced = '" + mailboxes_synced + "' where id = " + str(account))
+    db.commit()
+    db.close()
+    return ""
+
 @app.route("/threads/<int:account>/<mailbox>/<int:page>")
 def view_thread(account, mailbox, page):
     # Several case:
@@ -506,17 +545,13 @@ def view_thread(account, mailbox, page):
             page=page,
             emails=mails_id,
             mailbox=mailbox,
-            mailboxes=mail.get_mailboxes())
+            mailboxes=mail.mailboxes_synced)
 
 @app.route("/sync/<int:account>/")
 def sync_full(account):
     mail = get_mail_instance(account)
     mail.open_db()
-    for mb in mail.get_mailboxes():
-        app.logger.debug(mb[0])
-        mail.load_mailbox(mb[0])
-        mail.load_messages()
-        mail.update_flags(100)
+    mail.sync_all()
     mail.close_db()
     return jsonify(success=True)
 

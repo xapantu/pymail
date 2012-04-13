@@ -1,7 +1,12 @@
 <h4>Synced Mailboxes:</h4>
+<script type="text/javascript">
+    function update_mailbox(mailbox, value) {
+        $.getJSON('/ajax/settings/{{ account }}/mailbox;' + mailbox + '/' + Number(value), {}, null);
+    }
+</script>
 <form>
 {% for mb in all_mailboxes %}
-<input type="checkbox" name="{{ mb[1] }}" {% if not (mb[1] in unselected_mailboxes) %} checked {% endif %} id="{{ mb[1] }}" /><label for="{{mb[1]}}">{{ mb[1] }}</label>
+<input onchange="javascript:update_mailbox('{{ mb[1] }}', this.checked)" type="checkbox" name="{{ mb[1] }}" {% if not (mb[1] in unselected_mailboxes) %} checked {% endif %} id="{{ mb[1] }}" /><label for="{{mb[1]}}">{{ mb[1] }}</label>
 <br />
 {% endfor %}
 </form>

@@ -167,6 +167,12 @@ a:active, a:focus {
 #mailboxes li:hover  {
     background-color:#E2E4E0;
 }
+
+.modebutton > li:hover {
+    background-image: -moz-linear-gradient(bottom, #f0f0f0 0%, #efefef 100%);
+    background-image: -webkit-linear-gradient(top, #fff 0%, #e8e8e8 100%);
+}
+
 #sync {
     min-height:40px;
 }
@@ -212,7 +218,6 @@ background-size:1em 2em;
     left:0;
     z-index:2;
     background-size:100px 100px;
-    background-color: rgba(200, 200, 200, .95);
     /*background-image: linear-gradient(rgba(255, 255, 255, .2) 50%, transparent 50%, transparent);*/
     /* http://lea.verou.me/demos/css3-patterns.html */
     /*background-image: -moz-linear-gradient(-45deg, rgba(255, 255, 255, 0.2) 25%, rgba(205, 205, 205, 0.28) 25%, rgba(205, 205, 205, 0.28) 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%,rgba(205, 205, 205, 0.28) 75%, rgba(205, 205, 205, 0.28));*/

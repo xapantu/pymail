@@ -237,10 +237,13 @@ class EmailAccount(object):
                 subject = entry[3]
             messages.append(self._format_message_from_db_row(entry))
             if entry[5] == 0:
+                mb = self.mailbox
+                self.load_mailbox(entry[7])
                 self.imap_mail.uid("store", entry[0], "+FLAGS", "(\\Seen)")
                 self.db.execute('update mails set seen = 1 ' + self._get_where() + ' and imapid = ' + str(entry[0]))
                 need_seen_updated = True
                 app.logger.debug("need up_")
+                self.load_mailbox(mb)
 
         self.db.commit()
         if need_seen_updated:
@@ -263,7 +266,7 @@ class EmailAccount(object):
         threads_date = {}
         threads_seen = {}
         for msg in data:
-            if msg is None or msg[0] == ")":
+            if msg is None or msg[0] == ")" or "UID" not in msg[0]:
                 continue
             email = {}
 

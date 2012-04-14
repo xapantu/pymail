@@ -155,10 +155,15 @@ a:active, a:focus {
 }
 
 #mailboxes li.inline {
-    padding:3px;
+    padding:10px;
+    text-align:center;
+    list-style-type:none;
+}
+#mailboxes li.inline:hover {
+    background-color:transparent;
 }
 
-#mailboxes li a:hover {
+#mailboxes li:hover  {
     background-color:#E2E4E0;
 }
 #sync {
@@ -251,29 +256,77 @@ ul.dropdown {
     padding:0;
     margin:0;
 }
+
+div.dropdown.expanded ul.dropdown {
+    display:block;
+}
+
 ul.dropdown li {
     list-style-type:none;
     display:block;
     clear:both;
+    border:none;
+    float:none;
+    
 }
 div.dropdown {
     display:block;
     float:left;
     height:1em;
+    width:100%;
 }
 div.dropdown  a {
     float:none !important;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
 }
 div.dropdown div ul.link li {
     clear:both;
     display:block;
     list-style-type:none;
 }
+div.dropdown div a {
+    padding:0.2em;
+    width:auto !important;
+}
 div.dropdown div {
+    border:1px solid transparent;
+}
+div.dropdown.expanded div {
     background:white;
-    width:113px;
-    margin-left:5px;
     border:1px solid #ddd;
     box-shadow: 0px 0px 4px #ccc;
-    padding:5px;
+}
+
+.modebutton {
+    padding:0;
+    display:table; /*inline-block;*/
+    width:100%;
+    border-radius:5px;
+    white-space:nowrap;
+    box-shadow: 0px 0px 3px #ccc;
+    background-image: linear-gradient(bottom, #528B31 12%, #73A74F 56%, #96C96F 78%);
+    background-image: -moz-linear-gradient(top, #fff 0%, #e8e8e8 100%);
+}
+.modebutton > li:first-child {
+    border-radius:5px 0px 0px 5px;
+    border-left:1px solid lightgrey;
+}
+.modebutton > li:last-child {
+    border-radius:0px 5px 5px 0px;
+}
+.modebutton > li {
+    display:table-cell;
+    border:1px solid lightgrey;
+    border-left:none;
+    min-height:32px;
+    width:32px;
+    padding:0.2em;
+    vertical-align:top;
+}
+
+.modebutton .mailadress {
+    text-align:center;
+    width:auto;
 }

@@ -465,6 +465,13 @@ def view_mail_raw(account, imapid, mailbox = "INBOX"):
     return render_template("message.html", message=message, even=False)
 
 
+IMAP_ACCOUNTS = []
+def update_imap_accounts_list(db):
+    global IMAP_ACCOUNTS
+    cur = db.execute("select id, email, host from imapaccounts")
+    IMAP_ACCOUNTS = [dict(id=row[0], name=row[1], host=row[2]) for row in cur.fetchall()]
+
+
 @app.route("/", methods=["GET", "POST"])
 def start():
     db = sqlite3.connect(app.config["DATABASE"])
@@ -472,10 +479,9 @@ def start():
         db.execute("insert into imapaccounts (email, password, host, mailboxes_synced) values (?, ?, ?, ';INBOX;')",
                 [request.form["email"], request.form["password"], request.form["host"]])
         db.commit()
-    cur = db.execute("select id, email, host from imapaccounts")
-    entries = [dict(id=row[0], name=row[1], host=row[2]) for row in cur.fetchall()]
+        update_imap_accounts_list(db)
     db.close()
-    return render_template("main.html", accounts=entries)
+    return render_template("main.html", accounts=IMAP_ACCOUNTS)
 
 @app.route("/ajax/threadslist/<int:account>/<mailbox>/<int:page>")
 def view_thread_list(account, mailbox, page):
@@ -546,6 +552,7 @@ def view_thread(account, mailbox, page):
             page=page,
             emails=mails_id,
             mailbox=mailbox,
+            accounts=IMAP_ACCOUNTS,
             mailboxes=mail.mailboxes_synced)
 
 @app.route("/sync/<int:account>/")
@@ -585,4 +592,7 @@ email_accounts = {}
 
 if __name__ == "__main__":
     app.debug = True
+    db = sqlite3.connect(app.config["DATABASE"])
+    update_imap_accounts_list(db)
+    db.close()
     app.run()

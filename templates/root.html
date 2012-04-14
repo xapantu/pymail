@@ -69,25 +69,37 @@
             function close_popup() {
                 $("#popup-background").hide();
             }
+            function view_dropdown(id) {
+                if($('#' + id).hasClass('expanded'))
+                $('#' + id).removeClass('expanded');
+                    else
+                $('#' + id).addClass('expanded');
+            }
         </script>
     </head>
     <body>
         <ul id="mailboxes">
             <li id="settings-item" class="inline">
-                <a href="javascript:popup_block('/settings/account/{{ account }}')">
-                    <img src="{{ url_for('static', filename='img/preferences-desktop.png') }}" />
-                </a>
-                <a href="javascript:sync_full()">
-                    <img id="sync-img" src="{{ url_for('static', filename='img/view-refresh.png') }}" />
-                </a>
-                <div class="dropdown"><div>
-                <a href="#">{{ accountname }}</a>
-                <ul class="dropdown">
-                    <li>Item 1</li>
-                    <li>Item 2</li>
+                <ul class="modebutton">
+                    
+                    <li><a href="javascript:popup_block('/settings/account/{{ account }}')">
+                        <img src="{{ url_for('static', filename='img/preferences-desktop.png') }}" />
+                    </a></li>
+                    <li><a href="javascript:sync_full()">
+                        <img id="sync-img" src="{{ url_for('static', filename='img/view-refresh.png') }}" />
+                    </a></li>
+                    <li class="mailadress"><div class="dropdown" id="dropdownaccount"><div>
+                            <a href="javascript:view_dropdown('dropdownaccount')">{{ accountname }}</a>
+                            <ul class="dropdown">
+                                {% for entry in accounts %}
+                                {% if entry.id != account %}
+                                <li><a href="/threads/{{ entry.id }}/INBOX/0">{{ entry.name }} ({{ entry.host }})</a></li>
+                                {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div></li>
                 </ul>
-            </div>
-            </div>
                 <div class="clearer"></div>
             </li>
             {% for mail in mailboxes %}

@@ -572,6 +572,9 @@ def sync_full(account):
     mail.close_db()
     return jsonify(success=True)
 
+@app.route("/widgets")
+def widgets():
+    return render_template("widgets.html")
 @app.route("/sync/<int:account>/<mailbox>")
 def sync(account, mailbox):
     mail = get_mail_instance(account)

@@ -1,0 +1,92 @@
+body {
+    background-color:#d5d5d5;
+    font-size:0.95em;
+}
+
+h1 {
+    clear:both;
+}
+
+a:focus {
+    outline:none;
+}
+
+.button, .button > span {
+    display:block;
+    text-align:center;
+    font-family:sans-serif;
+    color:#2a2a2a;
+    text-decoration:none;
+
+    border-radius:2.5px;
+}
+.button {
+    min-width:100px;
+    float:left;
+    background-image:-moz-linear-gradient(top, #a9a9a9 0%, #838383 100%);
+    margin:0.5em;
+    box-shadow:0 0 2px #aaa;
+    padding:1px;
+}
+.button:active, .button.active {
+    box-shadow: none;
+    background-color:#555;
+    background-image:none;
+}
+.button:active > span, .button.active > span {
+    box-shadow: inset 0 0 6px #444;
+    background-image:-moz-linear-gradient(top, #959595 0%, #b8b8b8 100%);
+}
+.button > span > span {
+    padding-left:0.5em;
+    padding-right:0.5em;
+}
+.button > span {
+    background-image:-moz-linear-gradient(top, #fdfdfd 0%, #e1e1e1 100%);
+    width:100%;
+    padding-top:0.2em;
+    padding-bottom:0.2em;
+}
+.button.insensitive:active {
+    background-image:-moz-linear-gradient(top, #a9a9a9 0%, #838383 100%);
+}
+.button.insensitive > span {
+    background-image:-moz-linear-gradient(top, #e8e8e8 0%, #c5c5c5 100%);
+}
+.button.insensitive {
+    box-shadow:none;
+}
+.button.insensitive:active > span {
+    box-shadow: none;
+    background-image:-moz-linear-gradient(top, #e8e8e8 0%, #c5c5c5 100%);
+}
+
+.modebutton {
+    display:table;
+}
+
+.modebutton > .button {
+    min-width:5px;
+    margin:0;
+    float:none;
+    box-shadow:none;
+    padding-right:0px;
+    display:table-cell;
+    table-layout:fixed;
+}
+.modebutton > .button, .modebutton > .button > span {
+    border-radius:0px;
+}
+.modebutton > .button.active + .button {
+    padding-left:0px;
+}
+.modebutton > .button:last-child, .modebutton > .button.active {
+    padding-right:1px;
+}
+.modebutton > .button:first-child, .modebutton > .button:first-child > span {
+    border-radius:2px 0px 0px 2px;
+}
+
+.modebutton > .button:last-child, .modebutton > .button:last-child > span {
+    border-radius:0px 2px 2px 0px;
+}

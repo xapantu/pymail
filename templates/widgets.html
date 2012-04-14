@@ -1,0 +1,21 @@
+<html>
+    {% import 'w.html' as w %}
+    <head>
+        <title>Widgets...</title>
+        <link rel=stylesheet type=text/css href="{{ url_for('static', filename='widgets.css') }}">
+        <script type=text/javascript src="{{ url_for('static', filename='jquery-1.7.2.min.js') }}" ></script>
+        <script type="text/javascript" src="{{ url_for('static', filename='widgets.js') }}"></script>
+    </head>
+    <body>
+        <h1>Buttons</h1>
+        {{ w.button("Text") }}
+        {{ w.button("Insensitive", insensitive=true) }}
+        <h1>ModeButtons</h1>
+        <div class="modebutton">
+        {{ w.button("Text 1") }}
+        {{ w.button("Text 2") }}
+        {{ w.button("Text 3") }}
+        {{ w.button("Text 4") }}
+        </div>
+    </body>
+</html>

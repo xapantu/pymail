@@ -10,6 +10,7 @@ import time
 import sqlite3
 import imaplib
 from contextlib import closing
+import re
 import chardet
 
 
@@ -24,6 +25,10 @@ OFFLINE=False
 app.config.from_object(__name__)
 
 imap_accounts = {}
+
+pat1 = re.compile(r"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[#~!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)")
+
+
 
 class EmailAccount(object):
 
@@ -375,7 +380,7 @@ class EmailAccount(object):
             content += new_content[0]
         elif maintype == "text/plain":
             data = message_instance.get_payload(decode=True)
-            content += self._decode_full_proof(data, encoding).replace("\n", "<br />")
+            content += pat1.sub(r'<a href="\1" target="_blank">\1</a>', self._decode_full_proof(data, encoding).replace("\n", "<br />"))
         elif maintype == "text/html":
             data = message_instance.get_payload(decode=True)
             content += data.decode(encoding)

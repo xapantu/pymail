@@ -75,6 +75,9 @@
                     else
                 $('#' + id).addClass('expanded');
             }
+            function expand_thread(id) {
+                $('#' + id + '>.content').slideToggle('fast');
+            }
         </script>
     </head>
     <body>
@@ -104,7 +107,7 @@
             </li>
             {% for mail in mailboxes %}
             <li {% if mail == mailbox %}class="selected"{% endif %}>
-                <a href="/threads/{{ account }}/{{ mail }}/0">
+                <a href="/threads/{{ account }}/{{ mail.replace("/", "%") }}/0">
                     <span>{{ mail }} {% if 0 %} {% if mail[2] != 0 %} 
                         <strong>({{ mail[2] }})</strong>{% endif %}{% endif %}
                     </span>

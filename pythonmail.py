@@ -224,7 +224,7 @@ class EmailAccount(object):
 
     def load_thread(self, imapid):
         cur = self.db.execute('select imapid, fulltext, encoding, subject, sender, seen, date, mailbox from mails'
-                             + self._get_where()
+                             + self._get_where_no_mb()
                              + ' and thrid = ' + str(imapid)
                              + ' order by date')
         
@@ -428,7 +428,8 @@ def view_full_thread(account, mailbox, imapid):
     mail.load_mailbox(mailbox)
     messages = mail.load_thread(imapid)
     mail.close_db()
-    return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1]))
+    hide_first_mails = len(messages[0]) > 4
+    return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1], hide_first_mails=hide_first_mails))
 
 @app.route("/settings/account/<int:account>/")
 def settings_account(account):
@@ -517,7 +518,7 @@ def set_settings(account, key, value):
     db = sqlite3.connect(app.config["DATABASE"])
     mail = get_mail_instance(account)
     if keys[0] == "mailbox":
-        mailbox = keys[1]
+        mailbox = keys[1].replace("%", "/")
         if mailbox is not "" and (value == "1" or value == "0"):
             # Get the current synced mailboxes
             cur = db.execute("select  mailboxes_synced from imapaccounts where id = " + str(account))

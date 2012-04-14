@@ -1,17 +1,17 @@
 <h4>{{ subject }}</h4>
 {% for message in thread %}
-    <div class="message {% if not message.seen %}not-seen{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
-        <div class="header">
-        <div class="sender">{{message.sender}}</div>
-        <div class="date">{{message.date}}</div>
-        <div class="clearer"></div>
-    </div>
+    <div id="message-{{ message.imapid }}" class="message {% if not message.seen %}not-seen{% endif %} {% if message.seen and hide_first_mails %}email-hidden{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
+        <div class="header" onclick="javascript:expand_thread('message-{{ message.imapid }}')">
+            <div class="sender">{{message.sender}}</div>
+            <div class="date">{{message.date}}</div>
+            <div class="clearer"></div>
+        </div>
         <div class="content">
-        {% autoescape false %}
-        {{message.body}}
-        {% endautoescape %}
+            {% autoescape false %}
+            {{message.body}}
+            {% endautoescape %}
+        </div>
     </div>
-    </div>
-    {% else %}
-    Thread empty
+{% else %}
+Thread empty
 {% endfor %}

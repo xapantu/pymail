@@ -60,7 +60,8 @@ a:active, a:focus {
 #sidebar {
   float:left;
   width:0%;
-  overflow:auto;
+  overflow:scroll;
+  overflow-x:auto;
   height:100%;
   background-color:white;
 }
@@ -330,4 +331,8 @@ div.dropdown.expanded div {
 .modebutton .mailadress {
     text-align:center;
     width:auto;
+}
+
+.email-hidden .content {
+    display:none;
 }

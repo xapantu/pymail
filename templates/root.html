@@ -78,7 +78,8 @@
                 $('#' + id).addClass('expanded');
             }
             function expand_thread(id) {
-                $('#' + id + '>.content').slideToggle('fast');
+                $('#' + id + '>.message-content').slideToggle('fast');
+                $('#' + id).toggleClass('email-hidden');
             }
         </script>
     </head>

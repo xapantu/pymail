@@ -77,7 +77,7 @@ a:active, a:focus {
     margin:0.5em;
 }
 
-.message, .page-centered {
+/*.message, .page-centered {
     background-color:#fdfdfd;
     border-radius:4px;
     box-shadow: 0 0 1.5px 1.5px #eee;
@@ -98,7 +98,7 @@ a:active, a:focus {
     border-radius:4px;
     border-bottom:1px solid #ccc;
     box-shadow: 0px 1px 1px 0px #eee;
-}
+}*/
 
 .message .content, .page-centered .content {
     padding:1em;
@@ -338,6 +338,43 @@ div.dropdown.expanded div {
     width:auto;
 }
 
-.email-hidden .content {
+.email-hidden .message-content {
     display:none;
+}
+
+
+
+/* elementary */
+
+#sidebar {
+    background-color:#E6E6E6;
+}
+
+/* Hide subject */
+#sidebar > h4 {
+    display:none;
+}
+
+.message {
+    background-color:#F8F8F8;
+    border: 1px solid #aaa;
+    box-shadow:0 1px 3px #aaa;
+    border-radius:5px;
+    padding:0.5em 0.7em;
+    margin:0.5em;
+}
+
+.sender {
+    color:purple;
+}
+.header {
+    background:url(img/arrow.png) no-repeat left center transparent;
+    padding-left:15px;
+}
+.email-hidden > .header {
+    background:url(img/arrow-left.png) no-repeat left center transparent;
+}
+
+.date {
+    color:#58AAD2;
 }

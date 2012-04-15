@@ -17,5 +17,39 @@
         {{ w.button("Text 3") }}
         {{ w.button("Text 4") }}
         </div>
+        <div class="staticnotebook">
+        <div class="modebutton">
+        {{ w.button("Text 1") }}
+        {{ w.button("Text 2") }}
+        {{ w.button("Text 3") }}
+        {{ w.button("Text 4") }}
+        </div>
+        <div class="static-frame static-0">0</div>
+        <div class="static-frame static-1">1</div>
+        <div class="static-frame static-2">2</div>
+        <div class="static-frame static-3">3</div>
+        </div>
+        <h1>Entry</h1>
+        <form><input type="text" class="entry" /></form>
+        <form><input type="text" class="entry search" placeholder="Search..." /></form>
+        <h1>Content</h1>
+        <div class="content">
+        {{ w.button("Text 1") }}
+        <div class="clearer"></div>
+        </div>
+        {{ w.button("Trigger Popup", "popup_block('popup-1')") }}
+        <div class="popup-background" id="popup-1">
+            <div class="popup-block-horiz">
+            <div class="popup-block-vert">
+                <div class="content popup-block-content">
+                <a class="close-button" href="javascript:close_popup('popup-1')"><img src="{{ url_for('static', filename='img/close.png') }}" /></a>
+                <h1>Hey hey</h1>
+                Content there
+                <h1>Bye bye</h1>
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce auctor rhoncus sagittis. Praesent posuere fermentum sem ornare mollis. Pellentesque consequat, nibh sed bibendum mollis, eros velit cursus nisi, ac rhoncus tellus lorem in purus. Phasellus ultricies eleifend ante, et porta lectus mollis at.</p> 
+                </div>
+            </div>
+            </div>
+        </div>
     </body>
 </html>

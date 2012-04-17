@@ -367,7 +367,7 @@ div.dropdown.expanded div {
 .sender {
     color:purple;
 }
-.header {
+.message .header {
     background:url(img/arrow.png) no-repeat left center transparent;
     padding-left:15px;
 }

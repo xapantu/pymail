@@ -28,6 +28,11 @@ imap_accounts = {}
 
 pat1 = re.compile(r"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[#~!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)")
 
+# Transaltions stuff
+import locale;
+# Seriously, it is the 21th century, and we have to do that :/
+locale.setlocale(locale.LC_ALL, "");
+
 
 
 class EmailAccount(object):
@@ -310,30 +315,35 @@ class EmailAccount(object):
                 self.db.commit()
                 app.logger.debug(str(message_id) + final)
                 i = 0
-            cur = self.db.execute('select seen, mailbox from threads'
+            cur = self.db.execute('select seen, mailbox, sender from threads'
                                 + self._get_where_no_mb()
                                 + ' and imapid = ' + str(thrid)
                                 + ' limit 1')
             thread_db = cur.fetchall()
             if len(thread_db) is 0:
                 # We need to add a new thread
-                self.db.execute('insert into threads (subject, imapid, account, seen, mailbox, date)'
-                              + ' values (?, ?, ?, ?, ?, ?)',
-                                [email["subject"], thrid, self.get_ns(), seen, self.mailbox, date])
+                self.db.execute('insert into threads (subject, imapid, account, seen, mailbox, date, sender)'
+                              + ' values (?, ?, ?, ?, ?, ?, ?)',
+                                [email["subject"], thrid, self.get_ns(), seen, self.mailbox, date, email["sender"]])
             else:
                 old_seen = thread_db[0][0]
                 index = str(thrid)
+                senders = thread_db[0][2]
                 if threads_date.has_key(index):
                     old_seen = threads_date[index][1]
+                    senders = threads_date[index][4]
                 new_mb = thread_db[0][1]
+                if email["sender"] not in senders:
+                    senders += ", " + email["sender"]
                 if self.mailbox not in new_mb:
                     new_mb += "," + self.mailbox
-                threads_date[index] = (date, min(old_seen, int(email["seen"])), new_mb, thrid)
+                threads_date[index] = (date, min(old_seen, int(email["seen"])), new_mb, thrid, senders)
         self.db.commit()
         for th_date in threads_date.values():
+            senders = th_date[4]
             self.db.execute('update threads set date = \'' + th_date[0] + "', seen = " + str(th_date[1])
-                          + ', mailbox = \'' + th_date[2] +  '\''
-                              + self._get_where_no_mb() + " and imapid = " + str(th_date[3]))
+                          + ', mailbox = \'' + th_date[2] +  '\', sender = ? '
+                              + self._get_where_no_mb() + " and imapid = " + str(th_date[3]), (senders,))
         self.db.commit()
     
     def _get_where_no_mb(self):
@@ -360,11 +370,11 @@ class EmailAccount(object):
     Return a list with all threads from start to end.
     """
     def load_threads(self, start, end):
-        cur = self.db.execute('select imapid, subject, seen from threads'
+        cur = self.db.execute('select imapid, subject, seen, sender, date from threads'
                              + self._get_where()
                              + self._get_order_by()
                              + ' limit %s,%s' % (start, end))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2]) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=row[3], date=time.strftime("%a, %d %b %Y", time.strptime(row[4], "%Y-%m-%d %H:%M:%S")) ) for row in cur.fetchall()]
         return entries
 
     def get_content_from_message(self, message_instance):

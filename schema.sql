@@ -22,5 +22,6 @@ create table threads (
     account string not null,
     date string,
     mailbox string not null,
+    sender string,
     seen integer
 );

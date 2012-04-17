@@ -1,5 +1,5 @@
 body {
-    background-color:#d6d6d6;
+    background-color:#dedede;
     font-size:0.95em;
     font-family:sans-serif;
 
@@ -34,6 +34,7 @@ a:focus {
     min-width:100px;
     float:left;
     background-image:-moz-linear-gradient(top, #a9a9a9 0%, #838383 100%);
+    background-image:-webkit-linear-gradient(top, #a9a9a9 0%, #838383 100%);
     margin:0.5em;
     box-shadow:0 0 2px #aaa;
     padding:1px;
@@ -46,6 +47,7 @@ a:focus {
 .button:active > span, .button.active > span {
     box-shadow: inset 0 0 6px #444;
     background-image:-moz-linear-gradient(top, #959595 0%, #b8b8b8 100%);
+    background-image:-webkit-linear-gradient(top, #959595 0%, #b8b8b8 100%);
 }
 .button > span > span {
     padding-left:0.5em;
@@ -53,15 +55,18 @@ a:focus {
 }
 .button > span {
     background-image:-moz-linear-gradient(top, #fdfdfd 0%, #e1e1e1 100%);
+    background-image:-webkit-linear-gradient(top, #fdfdfd 0%, #e1e1e1 100%);
     width:100%;
     padding-top:0.2em;
     padding-bottom:0.2em;
 }
 .button.insensitive:active {
     background-image:-moz-linear-gradient(top, #a9a9a9 0%, #838383 100%);
+    background-image:-webkit-linear-gradient(top, #a9a9a9 0%, #838383 100%);
 }
 .button.insensitive > span {
     background-image:-moz-linear-gradient(top, #e8e8e8 0%, #c5c5c5 100%);
+    background-image:-webkit-linear-gradient(top, #e8e8e8 0%, #c5c5c5 100%);
 }
 .button.insensitive {
     box-shadow:none;
@@ -69,6 +74,7 @@ a:focus {
 .button.insensitive:active > span {
     box-shadow: none;
     background-image:-moz-linear-gradient(top, #e8e8e8 0%, #c5c5c5 100%);
+    background-image:-webkit-linear-gradient(top, #e8e8e8 0%, #c5c5c5 100%);
 }
 
 .modebutton {

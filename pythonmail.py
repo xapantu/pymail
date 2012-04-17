@@ -27,6 +27,9 @@ app.config.from_object(__name__)
 imap_accounts = {}
 
 pat1 = re.compile(r"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[#~!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)")
+# skip mail adresses:
+pat_emails = re.compile("( <([a-zA-Z.0-9@\-])+>)")
+pat_f_emails = re.compile("( &lt;([a-zA-Z.0-9@\-])+&gt;)")
 
 # Transaltions stuff
 import locale;
@@ -145,7 +148,7 @@ class EmailAccount(object):
         message["fulltext"] = entry[1]
         message["encoding"] = entry[2]
         message["subject"] = entry[3]
-        message["sender"] = entry[4]
+        message["sender"] = pat_f_emails.sub("<span class=\"softemail\">\\1</span>", entry[4].replace("<", "&lt;").replace(">", "&gt;"))
         message["seen"] = entry[5]
         message["date"] = entry[6]
         message["mailbox"] = entry[7]
@@ -295,12 +298,18 @@ class EmailAccount(object):
             decoded = decode_header(header["subject"])
             subject = ""
             for decod in decoded:
+                if subject != "":
+                    subject += " "
                 subject += self._decode_full_proof(decod[0], decod[1])
 
             email["imapid"] = message_id
             email["subject"] = subject
-            email["sender"] = decode_header(header["from"])[0]
-            email["sender"] = self._decode_full_proof(email["sender"][0], email["sender"][1])
+            senders  = decode_header(header["from"])
+            email["sender"] = ""
+            for sender in senders:
+                if email["sender"] != "":
+                    email["sender"] += " "
+                email["sender"] += self._decode_full_proof(sender[0], sender[1])
             decoded = decode_header(header["to"])[0]
             to = self._decode_full_proof(decoded[0], decoded[1])
             decoded = decode_header(header["date"])[0]
@@ -374,7 +383,7 @@ class EmailAccount(object):
                              + self._get_where()
                              + self._get_order_by()
                              + ' limit %s,%s' % (start, end))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=row[3], date=time.strftime("%a, %d %b %Y", time.strptime(row[4], "%Y-%m-%d %H:%M:%S")) ) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=pat_emails.sub("", row[3]), date=time.strftime("%a, %d %b %Y", time.strptime(row[4], "%Y-%m-%d %H:%M:%S")) ) for row in cur.fetchall()]
         return entries
 
     def get_content_from_message(self, message_instance):

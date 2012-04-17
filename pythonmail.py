@@ -143,6 +143,7 @@ class EmailAccount(object):
         return msg
 
     def _format_message_from_db_row(self, entry):
+        self.init_date()
         message = {}
         message["imapid"] = entry[0]
         message["fulltext"] = entry[1]
@@ -150,7 +151,7 @@ class EmailAccount(object):
         message["subject"] = entry[3]
         message["sender"] = pat_f_emails.sub("<span class=\"softemail\">\\1</span>", entry[4].replace("<", "&lt;").replace(">", "&gt;"))
         message["seen"] = entry[5]
-        message["date"] = entry[6]
+        message["date"] = self.format_date(entry[6], True)
         message["mailbox"] = entry[7]
 
         encoding = "utf-8" # is this encoding stuff *really* necessary?
@@ -375,15 +376,28 @@ class EmailAccount(object):
         entries = [dict(imapid=row[0], subject=row[1], sender=row[2], seen=row[3]) for row in cur.fetchall()]
         return entries
     
+    def init_date(self):
+        self._today = time.strftime("%a, %d %b %Y")
+
+    def format_date(self, row, full = False):
+        th_time = time.strptime(row, "%Y-%m-%d %H:%M:%S")
+        time_format = time.strftime("%a, %d %b %Y", th_time)
+        if time_format == self._today:
+            time_format = time.strftime("%H:%M", th_time)
+        elif full:
+            time_format = time.strftime("%a, %d %b %Y %H:%M", th_time)
+        return time_format
+    
     """
     Return a list with all threads from start to end.
     """
     def load_threads(self, start, end):
+        self.init_date()
         cur = self.db.execute('select imapid, subject, seen, sender, date from threads'
                              + self._get_where()
                              + self._get_order_by()
                              + ' limit %s,%s' % (start, end))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=pat_emails.sub("", row[3]), date=time.strftime("%a, %d %b %Y", time.strptime(row[4], "%Y-%m-%d %H:%M:%S")) ) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=pat_emails.sub("", row[3]), date=self.format_date(row[4]) ) for row in cur.fetchall()]
         return entries
 
     def get_content_from_message(self, message_instance):

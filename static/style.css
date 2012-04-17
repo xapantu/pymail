@@ -109,12 +109,12 @@ a:active, a:focus {
 }
 
 .message .sender {
-    width:50%;
+    width:70%;
     float:left;
     text-align:left;
 }
 .message .date {
-    width:50%;
+    width:30%;
     float:left;
     text-align:right;
 }
@@ -396,7 +396,7 @@ div.dropdown.expanded div {
 }
 .list .subject {
     clear:both;
-    margin-top:-1.5em;
+    margin-top:-1.6em;
     white-space:normal;
     height:auto;
 }

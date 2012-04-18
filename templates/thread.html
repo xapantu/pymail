@@ -3,7 +3,7 @@
     <div id="message-{{ message.imapid }}" class="message {% if not message.seen %}not-seen{% endif %} {% if message.seen and hide_first_mails %}email-hidden{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
         <div class="header" onclick="javascript:expand_thread('message-{{ message.imapid }}')">
             {% autoescape false %}
-            <div class="sender">{{message.sender}}</div>
+            <div class="sender">{{message.sender[0]}} <span class="softemail">{{message.sender[1]}}</span></div>
             {% endautoescape %}
             <div class="date">{{message.date}}</div>
             <div class="clearer"></div>

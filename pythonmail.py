@@ -12,6 +12,7 @@ import imaplib
 from contextlib import closing
 import re
 import chardet
+import datetime
 
 
 app = Flask(__name__)
@@ -149,7 +150,8 @@ class EmailAccount(object):
         message["fulltext"] = entry[1]
         message["encoding"] = entry[2]
         message["subject"] = entry[3]
-        message["sender"] = pat_f_emails.sub("<span class=\"softemail\">\\1</span>", entry[4].replace("<", "&lt;").replace(">", "&gt;"))
+        addr = email_utils.parseaddr(entry[4])
+        message["sender"] = addr
         message["seen"] = entry[5]
         message["date"] = self.format_date(entry[6], True)
         message["mailbox"] = entry[7]
@@ -378,16 +380,31 @@ class EmailAccount(object):
     
     def init_date(self):
         self._today = time.strftime("%a, %d %b %Y")
+        dt = datetime.timedelta(days=1)
+        self._yesterday = time.strftime("%a, %d %b %Y", (datetime.datetime.today() - dt).timetuple())
 
     def format_date(self, row, full = False):
         th_time = time.strptime(row, "%Y-%m-%d %H:%M:%S")
         time_format = time.strftime("%a, %d %b %Y", th_time)
         if time_format == self._today:
             time_format = time.strftime("%H:%M", th_time)
+        elif time_format == self._yesterday:
+            time_format = time.strftime("hier" + ", %H:%M", th_time)
         elif full:
             time_format = time.strftime("%a, %d %b %Y %H:%M", th_time)
         return time_format
     
+    def parse_emails(self, row):
+        content = ""
+        for mail in row.split(", "):
+            name = email_utils.parseaddr(mail)
+            if content != "":
+                content += ", "
+            if name[0] != "":
+                content += name[0]
+            else:
+                content += name[1]
+        return content
     """
     Return a list with all threads from start to end.
     """
@@ -397,7 +414,7 @@ class EmailAccount(object):
                              + self._get_where()
                              + self._get_order_by()
                              + ' limit %s,%s' % (start, end))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=pat_emails.sub("", row[3]), date=self.format_date(row[4]) ) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=self.parse_emails(row[3]), date=self.format_date(row[4]) ) for row in cur.fetchall()]
         return entries
 
     def get_content_from_message(self, message_instance):

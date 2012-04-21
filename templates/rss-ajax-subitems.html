@@ -1,0 +1,19 @@
+<ul class=entries>
+    {% for entry in subitems %}
+    <li id="entry-{{entry.id}}" class="{% if not entry.seen %}unread{% endif %}">
+    <a href="javascript:load_sidebar({{entry.id}}, '{{subitems_target}}{{entry.id}}')" class="{{ loop.cycle('odd', 'even') }}">
+        {% if entry.sender %}
+        <span>
+            <span class="sender">{{ entry.sender }}</span>
+        {% else %}
+        <span class="nosender">
+        {% endif %}
+            <span class="date"><span>{{ entry.date }}</span></span>
+            <span class="subject"><span>{{ entry.subject }}</span></span>
+        </span>
+    </a>
+    </li>
+        {% else %}
+        <li><em>Unbelievable. No entries here so far</em></li>
+    {% endfor %}
+</ul>

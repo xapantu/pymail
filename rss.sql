@@ -12,6 +12,8 @@ create table articles (
     feed integer,
     url string,
     guid string,
+    pubDate string,
+    seen integer,
     name string,
     content string
 );

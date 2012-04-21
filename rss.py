@@ -104,21 +104,46 @@ def sync_feed(feedid):
         cur = g.db.execute("select count(id) from articles where guid = (?) and feed = (?)", (article["guid"], feedid))
         count = cur.fetchall()[0][0]
         if count == 0:
-            g.db.execute("insert into articles (name, url, guid, content, feed) values (?, ?, ?, ?, ?)", (article["title"], article["link"], article["guid"], article["description"], feedid))
+            g.db.execute("insert into articles (name, url, guid, content, feed, pubDate, seen) values (?, ?, ?, ?, ?, ?, 0)", (article["title"], article["link"], article["guid"], article["description"], feedid, article["pubDate"]))
     g.db.commit()
 
 @app.route("/ajax/feed/<int:feedid>/")
 def ajax_feed(feedid):
-    cur = g.db.execute("select content, name from articles where feed = " + str(feedid))
-    content = ""
-    for row in cur.fetchall():
-        content += row[1] + "<br />" + row[0] + "<hr />"
-    return content
+    cur = g.db.execute("select name, id, pubDate, seen from articles where feed = " + str(feedid))
+    subitems = [dict(subject=row[0], id=row[1], date=row[2], seen=row[3]) for row in cur.fetchall()]
+    return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
+
+@app.route("/ajax/article/<int:article>/")
+def ajax_article(article):
+    cur = g.db.execute("select content, name, seen from articles where id = " + str(article))
+    data = cur.fetchall()[0]
+    app.logger.debug(data)
+    if data[2] == 0:
+        g.db.execute("update articles set seen = 1 where id = " + str(article))
+        g.db.commit()
+    return jsonify(content=data[0])
 
 @app.route("/sync/<int:feedid>/")
 def sync(feedid):
     sync_feed(feedid)
     return "done"
+
+def get_feed_list():
+    cur = g.db.execute("select url, name, id from feeds")
+    feeds = [dict(url=row[0], name=row[1], id=row[2]) for row in cur.fetchall()]
+    for feed in feeds:
+        cur = g.db.execute("select count(id) from articles where feed = " + str(feed["id"]) + " and seen = 0")
+        feed["unread"] = cur.fetchall()[0][0]
+    return feeds
+
+@app.route("/sync")
+def sync_all():
+    cur = g.db.execute("select id from feeds")
+    for row in cur.fetchall():
+        sync_feed(row[0])
+    # Get the feeds
+    feeds = get_feed_list()
+    return jsonify(done=1, content=render_template("rss-ajax-firstpane.html", feeds=feeds))
 
 @app.route("/", methods=["POST", "GET"])
 def root():
@@ -126,9 +151,9 @@ def root():
         add_feed(request.form["new_feed"])
 
     # Get the feeds
-    cur = g.db.execute("select url, name from feeds")
-    feeds = [dict(url=row[0], name=row[1]) for row in cur.fetchall()]
-    return render_template("rss.html", feeds=feeds)
+    cur = g.db.execute("select url, name, id from feeds")
+    feeds = [dict(url=row[0], name=row[1], id=row[2]) for row in cur.fetchall()]
+    return render_template("rss.html", feeds=feeds, sync_button="sync_all_rss()")
 
 def init_db():
     with closing(sqlite3.connect(DATABASE)) as db:
@@ -138,4 +163,4 @@ def init_db():
 
 if __name__ == "__main__":
     app.debug = True
-    app.run()
+    app.run(port=5001)

@@ -1,20 +1,13 @@
 {% extends "page-with-sidebar.html" %}
 {% block list %}
-    <ul>
-        <li><a href="javascript:add_feed()">Add a feed</a></li>
-    {% for feed in feeds %}
-        <li>{{ feed.name }}</li>
-    {% else %}
-        No feed. Please add one!
-    {% endfor %}
-    </ul>
+    {% include "rss-ajax-firstpane.html" %}
 {% endblock %}
 
 {% block script %}
     <script type="text/javascript">
         function add_feed() {
             $("#popup-block-content").html('<form method="POST" action"/">'
-                    + '<input type="text" name="new_feed" placeholder="Feed URI..." />'
+                    + '<input type="text" name="new_feed" placeholder="Feed URI..." class="entry" />'
                     + '<input type="submit" /></form>');
             $("#popup-block-header").html("Add a feed");
             $("#popup-background").show();
@@ -22,5 +15,14 @@
         function close_popup() {
             $("#popup-background").hide();
         }
+        function sync_all_rss() {
+            $("#sync-button").addClass("insensitive");
+            $("#rootelements").html("<li><img src='{{ url_for('static', filename='loading.gif') }}' class='loading' /></li>");
+            $.getJSON("/sync", {}, function(data) {
+                    $("#rootelements").html(data.content);
+                    $("#sync-button").removeClass("insensitive");
+            });
+        }
     </script>
+    <script type="text/javascript" src="{{ url_for("static", filename="layout.js") }}"></script>
 {% endblock %}

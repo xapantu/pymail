@@ -1,0 +1,6 @@
+<li><a href="javascript:add_feed()">Add a feed</a></li>
+{% for feed in feeds %}
+    <li><a href="javascript:load_subitems({{ feed.id }}, '/ajax/feed/{{ feed.id }}/')">{{ feed.name }} ({{ feed.unread }})</a></li>
+{% else %}
+    No feed. Please add one!
+{% endfor %}

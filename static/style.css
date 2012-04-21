@@ -1,3 +1,4 @@
+@import url(layout.css);
 body            { font-size:1em; height:100%; width:100%; position:absolute; margin:0; padding:0; display:block; font-family: sans-serif; background: #fff; }
 a, h1, h2       { color: #377BA8; }
 h1              { border-bottom: 2px solid #eee; }
@@ -122,7 +123,7 @@ a:active, a:focus {
 #content .list {
     margin-left:15.3em;
 }
-#mailboxes {
+#mailboxes, #firstpane {
     position:absolute;
     height:100%;
     width:17em;
@@ -132,7 +133,7 @@ a:active, a:focus {
     font-size:0.9em;
     border-right: 1px solid #bbb;
 }
-#mailboxes li a span {
+#mailboxes li a span, #firstpane li a span {
     padding: 0.3em;
     display:block;
     padding-left: 0.8em;
@@ -140,7 +141,7 @@ a:active, a:focus {
     text-overflow:ellipsis;
     white-space:nowrap;
 }
-#mailboxes li a {
+#mailboxes li a, #firstpane li a {
     display:block;
     width:100%;
     text-decoration:none;
@@ -163,7 +164,7 @@ a:active, a:focus {
     background-color:transparent;
 }
 
-#mailboxes li:hover  {
+#mailboxes li:hover, #firstpane li:hover  {
     background-color:#E2E4E0;
 }
 
@@ -377,38 +378,4 @@ div.dropdown.expanded div {
 
 .date {
     color:#58AAD2;
-}
-
-.list .date {
-    font-size:1em;
-}
-.list .date, .list .sender, .list .subject {
-    display:block;
-    margin:0;
-    padding:0;
-    height:1.5em;
-}
-.list .date {
-    text-align:right;
-    position:relative;
-    top:-1.66em; /* subtle computing to handle the font size decrease: 1.5 + (1/0.82*1.5 - 1.5)/2 */
-    left:0;
-}
-.list .subject {
-    clear:both;
-    margin-top:-1.6em;
-    white-space:normal;
-    height:auto;
-}
-
-.list .subject span {
-    font-size:0.92em;
-    padding:0;
-}
-
-.list .sender {
-    padding-right:9em;
-}
-.list .date span {
-    font-size:0.85em;
 }

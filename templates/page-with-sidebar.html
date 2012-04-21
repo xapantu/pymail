@@ -1,9 +1,15 @@
 {% extends "page.html" %}
+{% import "w.html" as w %}
 {% block body %}
-
+        <div id="firstpane">
+            {% if sync_button %}{{ w.button("Sync", sync_button, id="sync-button") }}{% endif %}
+            <ul id="rootelements">
+                {% block list %}{% endblock %}
+            </ul>
+        </div>
         <div id="content">
             <div class="list">
-                {% block list %}{% endblock %}
+                <div id="subitems-block">{% block subitems %}{% endblock %}</div>
             </div>
         </div>
         <div id="sidebar">...</div>

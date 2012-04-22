@@ -5,6 +5,8 @@ from flask import Flask, render_template, session, request, redirect, url_for, j
 from contextlib import closing
 import sqlite3
 import xml.etree.ElementTree
+import email.utils
+import time
 
 app = Flask(__name__)
 DATABASE = "rss/rss.sqlite"
@@ -41,7 +43,7 @@ def parse_item(item):
         elif node.tag == "description":
             description = node.text
         elif node.tag == "pubDate":
-            pubDate = node.text
+            pubDate = time.strftime("%Y-%m-%d %H:%M:%S", email.utils.parsedate(node.text))
         elif node.tag == "guid":
             guid = node.text
         else:
@@ -77,6 +79,8 @@ def parse_xml(feed_uri):
 
     root_element = xml.etree.ElementTree.fromstring(data)
     contents = []
+    if root_element.tag != "rss":
+        raise NameError("The root element is not rss, it may be a html file")
     for channel in root_element:
         if channel.tag != "channel": # another node?? not valid, let's skip it
             print("Root element contains a node of type %s" % channel.tag)
@@ -92,7 +96,29 @@ def add_feed(feed_name):
 def sync_feed(feedid):
     cur = g.db.execute("select name, url from feeds where id = " + str(feedid))
     row = cur.fetchall()[0]
-    content = parse_xml(row[1])[0]
+    try:
+        content = parse_xml(row[1])[0]
+    except:
+        # Hum, maybe it is not a feed :)
+        try:
+            from BeautifulSoup import BeautifulSoup
+            import urllib2
+            page = urllib2.urlopen(row[1])
+            soup = BeautifulSoup(page)
+            url = soup.find("link", {"type": "application/rss+xml"}).attrMap["href"]
+            app.logger.debug("Switch to %s for %s" % (url, row[1]))
+            g.db.execute("update feeds set url = (?) where id = " + str(feedid), (url,))
+            g.db.commit()
+            content = parse_xml(url)[0]
+        except ImportError:
+            g.db.execute("update feeds set name = (?) where id = " + str(feedid), ("Feed not valid, install beautifoul soup for autodetection",))
+            g.db.commit()
+            return
+        except:
+            g.db.execute("update feeds set name = (?) where id = " + str(feedid), ("Feed not valid, couldn't autodetect it :(",))
+            g.db.commit()
+            raise
+            return
     app.logger.debug(content["title"])
     if content["title"] != row[0]:
         g.db.execute("update feeds set name = (?) where id = " + str(feedid), (content["title"],))
@@ -111,6 +137,12 @@ def sync_feed(feedid):
 def ajax_feed(feedid):
     cur = g.db.execute("select name, id, pubDate, seen from articles where feed = " + str(feedid))
     subitems = [dict(subject=row[0], id=row[1], date=row[2], seen=row[3]) for row in cur.fetchall()]
+    return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
+
+@app.route("/ajax/feed/unread/")
+def ajax_unread():
+    cur = g.db.execute("select articles.name, articles.id, articles.pubDate, articles.seen, feeds.name from articles, feeds where seen = 0 and articles.feed = feeds.id")
+    subitems = [dict(subject=row[0], id=row[1], date=row[2], seen=row[3], sender=row[4]) for row in cur.fetchall()]
     return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
 
 @app.route("/ajax/article/<int:article>/")
@@ -151,8 +183,7 @@ def root():
         add_feed(request.form["new_feed"])
 
     # Get the feeds
-    cur = g.db.execute("select url, name, id from feeds")
-    feeds = [dict(url=row[0], name=row[1], id=row[2]) for row in cur.fetchall()]
+    feeds = get_feed_list()
     return render_template("rss.html", feeds=feeds, sync_button="sync_all_rss()")
 
 def init_db():

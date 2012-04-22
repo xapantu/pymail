@@ -1,6 +1,11 @@
 <li><a href="javascript:add_feed()">Add a feed</a></li>
+<li><a href="javascript:load_subitems(-1, '/ajax/feed/unread/')">Unread</a></li>
 {% for feed in feeds %}
-    <li><a href="javascript:load_subitems({{ feed.id }}, '/ajax/feed/{{ feed.id }}/')">{{ feed.name }} ({{ feed.unread }})</a></li>
+    <li {% if feed.unread > 0 %}class="unread"{% endif %}>
+        <a href="javascript:load_subitems({{ feed.id }}, '/ajax/feed/{{ feed.id }}/')">
+            {{ feed.name }}  {% if feed.unread > 0 %}({{ feed.unread }}){% endif %}
+         </a>
+    </li>
 {% else %}
     No feed. Please add one!
 {% endfor %}

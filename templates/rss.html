@@ -23,6 +23,19 @@
                     $("#sync-button").removeClass("insensitive");
             });
         }
+
+        $(function(){
+            $("#viewswitcher > a").click(function(object) {
+                view_normal = $(this).attr("id") == "view1";
+                if (view_normal) {
+                    $("#mainsubdiv").addClass("list");
+                }
+                else {
+                    $("#mainsubdiv").removeClass("list");
+                }
+                load_subitems(rootitem_selected, '/ajax/feed/' + rootitem_selected, '/ajax/fullview/' + rootitem_selected);
+            });
+        });
     </script>
     <script type="text/javascript" src="{{ url_for("static", filename="layout.js") }}"></script>
 {% endblock %}

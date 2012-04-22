@@ -32,12 +32,6 @@ pat1 = re.compile(r"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[#~!*\(\),]|(?:%[0-9
 pat_emails = re.compile("( <([a-zA-Z.0-9@\-])+>)")
 pat_f_emails = re.compile("( &lt;([a-zA-Z.0-9@\-])+&gt;)")
 
-# Transaltions stuff
-import locale;
-# Seriously, it is the 21th century, and we have to do that :/
-locale.setlocale(locale.LC_ALL, "");
-
-
 
 class EmailAccount(object):
 

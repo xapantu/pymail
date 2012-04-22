@@ -48,6 +48,45 @@
     clear:both;
 }
 
-#firstpane > .button {
+/*#firstpane > .button {
     float:none;
+}*/
+
+.rss .message {
+    box-shadow:none;
+    background-color:transparent;
+    border:none;
+    border-top:1px solid lightgrey;
+    border-radius:0;
+}
+.rss #subitems-block > .message:nth-child(2) {
+    border-top:none;
+}
+
+.rss {
+    background-color:#f3f3f3;
+}
+
+.rss .message .header {
+    background:none;
+    padding-left:0;
+}
+
+.rss .sender {
+    color:black;
+    font-weight:bold;
+    font-size:1.4em;
+}
+.rss .sender a {
+    color:black;
+    text-decoration:none;
+}
+
+.rss .sender a:hover {
+    text-decoration:underline;
+}
+
+.rss .softemail {
+    font-size:0.8em;
+    font-weight:normal;
 }

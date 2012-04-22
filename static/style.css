@@ -120,7 +120,7 @@ a:active, a:focus {
     text-align:right;
 }
 
-#content .list {
+#mainsubdiv {
     margin-left:15.3em;
 }
 #mailboxes, #firstpane {
@@ -204,7 +204,7 @@ font-weight:bold;
     top:50%;
 }
 
-#mailboxes .selected {
+#mailboxes .selected, #rootelements .selected {
     background-color:#eee;
 }
 .entries .selected a {

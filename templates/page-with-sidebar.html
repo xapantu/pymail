@@ -3,12 +3,16 @@
 {% block body %}
         <div id="firstpane">
             {% if sync_button %}{{ w.button("Sync", sync_button, id="sync-button") }}{% endif %}
+            <div id="viewswitcher" class="modebutton">
+                {{ w.button("1", id="view1") }}
+                {{ w.button("2", active=true) }}
+            </div>
             <ul id="rootelements">
                 {% block list %}{% endblock %}
             </ul>
         </div>
         <div id="content">
-            <div class="list">
+            <div class="" id="mainsubdiv">
                 <div id="subitems-block">{% block subitems %}{% endblock %}</div>
             </div>
         </div>

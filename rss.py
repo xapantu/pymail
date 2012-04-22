@@ -7,6 +7,7 @@ import sqlite3
 import xml.etree.ElementTree
 import email.utils
 import time
+import date_formater
 
 app = Flask(__name__)
 DATABASE = "rss/rss.sqlite"
@@ -18,6 +19,7 @@ app.config.from_object(__name__)
 @app.before_request
 def before_request():
     g.db = sqlite3.connect(app.config['DATABASE'])
+    date_formater.init_date()
 
 @app.teardown_request
 def teardown_request(exception):
@@ -90,7 +92,9 @@ def parse_xml(feed_uri):
     
 
 def add_feed(feed_name):
-    g.db.execute("insert into feeds (url) values (?)", (feed_name,))
+    if "://" not in feed_name:
+        feed_name = "http://" + feed_name
+    g.db.execute("insert into feeds (url, name) values (?, ?)", (feed_name,feed_name))
     g.db.commit()
 
 def sync_feed(feedid):
@@ -135,14 +139,19 @@ def sync_feed(feedid):
 
 @app.route("/ajax/feed/<int:feedid>/")
 def ajax_feed(feedid):
-    cur = g.db.execute("select name, id, pubDate, seen from articles where feed = " + str(feedid))
-    subitems = [dict(subject=row[0], id=row[1], date=row[2], seen=row[3]) for row in cur.fetchall()]
+    cur = g.db.execute("select name, id, pubDate, seen from articles where feed = " + str(feedid) + " order by articles.pubDate desc")
+    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3]) for row in cur.fetchall()]
     return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
 
-@app.route("/ajax/feed/unread/")
+@app.route("/ajax/seen/<int:article>/<int:seen>")
+def ajax_mark_seen(article, seen):
+    return jsonify(done=1)
+
+
+@app.route("/ajax/feed/-1")
 def ajax_unread():
-    cur = g.db.execute("select articles.name, articles.id, articles.pubDate, articles.seen, feeds.name from articles, feeds where seen = 0 and articles.feed = feeds.id")
-    subitems = [dict(subject=row[0], id=row[1], date=row[2], seen=row[3], sender=row[4]) for row in cur.fetchall()]
+    cur = g.db.execute("select articles.name, articles.id, articles.pubDate, articles.seen, feeds.name from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
+    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], sender=row[4]) for row in cur.fetchall()]
     return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
 
 @app.route("/ajax/article/<int:article>/")
@@ -154,6 +163,20 @@ def ajax_article(article):
         g.db.execute("update articles set seen = 1 where id = " + str(article))
         g.db.commit()
     return jsonify(content=data[0])
+
+@app.route("/ajax/fullview/-1")
+def ajax_full_view_unread():
+    date_formater.init_date()
+    cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url from articles, feeds where feeds.id = articles.feed order by articles.pubDate desc")
+    feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6])) for row in cur.fetchall()]
+    return jsonify(content=render_template("rss-ajax-thread.html", thread=feeds))
+
+@app.route("/ajax/fullview/<int:article>/")
+def ajax_full_view(article):
+    date_formater.init_date()
+    cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url from articles, feeds where feeds.id = articles.feed and feeds.id = " + str(article) + " order by articles.pubDate desc")
+    feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6])) for row in cur.fetchall()]
+    return jsonify(content=render_template("rss-ajax-thread.html", thread=feeds))
 
 @app.route("/sync/<int:feedid>/")
 def sync(feedid):

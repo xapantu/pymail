@@ -41,3 +41,13 @@ function load_subitems(id, target_normal, additional_target) {
         });
     }
 }
+
+function mark_as_read(id) {
+    ping_url('/ajax/seen/' + id + '/1');
+    $("#message-" + id).fadeTo('slow', .4);
+    $("#message-" + id).removeClass('not-seen');
+}
+
+function ping_url(target) {
+    $.getJSON(target, {}, null);
+}

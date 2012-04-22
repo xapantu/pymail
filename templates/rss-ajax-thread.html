@@ -1,6 +1,6 @@
 <h4>{{ subject }}</h4>
 {% for message in thread %}
-<div id="message-{{ message.imapid }}" class="message {% if not message.seen %}not-seen{% endif %} {% if message.seen and hide_first_mails %}email-hidden{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
+<div id="message-{{ message.imapid }}" class="message {% if not message.seen %}unread{% endif %} {% if message.seen and hide_first_mails %}email-hidden{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
         <div class="header" onclick="javascript:expand_thread('message-{{ message.imapid }}')">
             {% autoescape false %}
             <div class="sender"><a target="_blank" href="{{message.sender[2]}}">{{message.sender[0]}}</a> <span class="softemail">{{message.sender[1]}}</span></div>
@@ -9,6 +9,7 @@
             <div class="clearer"></div>
         </div>
         <div class="message-content">
+            <a href="javascript:mark_as_read({{message.imapid}})">Mark as read</a>
             {% autoescape false %}
             {{message.body}}
             {% endautoescape %}

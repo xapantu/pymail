@@ -74,7 +74,7 @@
 
 .rss .sender {
     color:black;
-    font-weight:bold;
+    /*font-weight:bold;*/
     font-size:1.4em;
 }
 .rss .sender a {
@@ -89,4 +89,8 @@
 .rss .softemail {
     font-size:0.8em;
     font-weight:normal;
+}
+
+.rss .unread .sender {
+    font-weight:bold;
 }

@@ -145,6 +145,9 @@ def ajax_feed(feedid):
 
 @app.route("/ajax/seen/<int:article>/<int:seen>")
 def ajax_mark_seen(article, seen):
+    #FIXME: investigate wether the int: is enough to avoid a sql injection, not sure right now
+    g.db.execute("update articles set seen = " + str(seen) + " where id = " + str(article))
+    g.db.commit()
     return jsonify(done=1)
 
 
@@ -167,7 +170,7 @@ def ajax_article(article):
 @app.route("/ajax/fullview/-1")
 def ajax_full_view_unread():
     date_formater.init_date()
-    cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url from articles, feeds where feeds.id = articles.feed order by articles.pubDate desc")
+    cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
     feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6])) for row in cur.fetchall()]
     return jsonify(content=render_template("rss-ajax-thread.html", thread=feeds))
 

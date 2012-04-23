@@ -1,6 +1,16 @@
 {% extends "page-with-sidebar.html" %}
-{% block list %}
-    {% include "rss-ajax-firstpane.html" %}
+{% set class = "rss" %}
+
+{% block rootelements %}
+    {% include "rss/rss-ajax-firstpane.html" %}
+{% endblock %}
+
+{% block rootelementstop %}
+            {% if sync_button %}{{ w.button("Sync", sync_button, id="sync-button") }}{% endif %}
+            <div id="viewswitcher" class="modebutton">
+                {{ w.button("/static/img/rss/normalview.png", id="view1", img=true) }}
+                {{ w.button("/static/img/rss/fullview.png", active=true, img=true) }}
+            </div>
 {% endblock %}
 
 {% block script %}

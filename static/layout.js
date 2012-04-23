@@ -81,7 +81,3 @@ function mark_as_unread(id, feedid) {
     $("#message-" + id + " .mark-unread").hide();
     update_unread_count(Number($("#unread-count-" + feedid).html()) + 1, feedid);
 }
-
-function ping_url(target) {
-    $.getJSON(target, {}, null);
-}

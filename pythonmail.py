@@ -476,14 +476,14 @@ def view_full_thread(account, mailbox, imapid):
     messages = mail.load_thread(imapid)
     mail.close_db()
     hide_first_mails = len(messages[0]) > 4
-    return jsonify(message=render_template("thread.html", thread=messages[0], subject=messages[1], hide_first_mails=hide_first_mails))
+    return jsonify(message=render_template("email/email-thread.html", thread=messages[0], subject=messages[1], hide_first_mails=hide_first_mails))
 
 @app.route("/settings/account/<int:account>/")
 def settings_account(account):
     mail = get_mail_instance(account)
     all_mb = mail.get_all_mailboxes()
     unselected_mb = mail.get_unselected_mailboxes()
-    content = render_template("ajax-settings.html", account=account, name=mail.name, host=mail.host, all_mailboxes=all_mb, unselected_mailboxes=unselected_mb)
+    content = render_template("email/email-ajax-settings.html", account=account, name=mail.name, host=mail.host, all_mailboxes=all_mb, unselected_mailboxes=unselected_mb)
     return jsonify(content=content, title="Settings of %s (%s)" % (mail.name, mail.host))
 
 @app.route("/mails/<int:account>/<mailbox>/<int:imapid>")
@@ -515,7 +515,7 @@ def view_mail_raw(account, imapid, mailbox = "INBOX"):
     mail.load_mailbox(mailbox)
     message = mail.load_message(imapid)
     mail.close_db()
-    return render_template("message.html", message=message, even=False)
+    return render_template("email/email-message.html", message=message, even=False)
 
 
 IMAP_ACCOUNTS = []
@@ -534,7 +534,7 @@ def start():
         db.commit()
         update_imap_accounts_list(db)
     db.close()
-    return render_template("main.html", accounts=IMAP_ACCOUNTS)
+    return render_template("email/email-home.html", accounts=IMAP_ACCOUNTS)
 
 @app.route("/ajax/threadslist/<int:account>/<mailbox>/<int:page>")
 def view_thread_list(account, mailbox, page):
@@ -553,7 +553,7 @@ def view_thread_list(account, mailbox, page):
     mails_id = mail.load_threads(page*100, 100)
     mail.close_db()
     
-    return jsonify(thread_list=render_template('ajax-threads-list.html',
+    return jsonify(thread_list=render_template('email/email-ajax-threads-list.html',
                                     emails=mails_id,
                                     mailbox=mailbox,
                                     mailboxes=mail.get_mailboxes())
@@ -597,7 +597,7 @@ def view_thread(account, mailbox, page):
     mails_id = mail.load_threads(page*100, 100)
     mail.close_db()
     
-    return render_template('email-thread.html',
+    return render_template('email/email.html',
             account=account,
             accountname=mail.name,
             page_next="/threads/" + mailbox + "/" + str(int(page) + 1),
@@ -618,7 +618,7 @@ def sync_full(account):
 
 @app.route("/widgets")
 def widgets():
-    return render_template("widgets.html")
+    return render_template("email/widgets.html")
 @app.route("/sync/<int:account>/<mailbox>")
 def sync(account, mailbox):
     mail = get_mail_instance(account)
@@ -642,7 +642,7 @@ def root(account, mailbox, page):
     mails_id = mail.load_list(page * 100, (page + 1) * 100)
     mail.close_db()
     emails_list = sorted(mails_id, lambda x, y: cmp(int(y["imapid"]), int(x["imapid"])))
-    return render_template('email-list.html', page=0, emails=emails_list, mailbox=mailbox)
+    return render_template('email/email-list.html', page=0, emails=emails_list, mailbox=mailbox)
 
 email_accounts = {}
 

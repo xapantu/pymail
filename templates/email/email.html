@@ -1,11 +1,7 @@
-<!doctype html>
-<html>
-    <head>
-        <title>Hello from Flask</title>
-        <link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
-        <link rel=stylesheet type=text/css href="{{ url_for('static', filename='widgets.css') }}">
-        <script type=text/javascript src="{{ url_for('static', filename='jquery-1.7.2.min.js') }}" ></script>
-        <script type="text/javascript" src="{{ url_for('static', filename='widgets.js') }}"></script>
+{% set class = "email" %}
+{% set default_list = true %}
+{% extends "page-with-sidebar.html" %}
+{% block script %}
         <script type="text/javascript">
             sidebar_view = false;
             function view_message(id) {
@@ -82,9 +78,9 @@
                 $('#' + id).toggleClass('email-hidden');
             }
         </script>
-    </head>
-    <body>
-        <ul id="mailboxes">
+{% endblock %}
+
+{% block rootelements %}
             <li id="settings-item" class="inline">
                 <ul class="modebutton">
                     
@@ -117,28 +113,20 @@
                 </a>
             </li>
             {% endfor %}
-        </ul>
-        <div id="content">
-            <div id="mainsubdiv" class="list">
-                {% block body %}{% endblock %}
-            </div>
-        </div>
-        <div id="sidebar">...</div>
-        <div class="clearer"></div>
-        <div id="popup-background" class="popup-background">
-            <div class="popup-wrapper">
-            <div class="popup-block-horiz">
-                <div class="popup-block-vert">
-                    <div id="popup-block" class="content popup-block-content">
-                        <a class="close-button" href="javascript:close_popup('popup-1')"><img src="{{ url_for('static', filename='img/close.png') }}" /></a>
-                        <div class="header"><h1><span id="popup-block-header">Loading...</span></h1></div>
-                        <div class="content" id="popup-block-content">...</div>
-                    </div>
-                </div>
-            </div>
-            </div>
-       </div> 
+{% endblock %}
 
-    </body>
-</html>
-
+{% block subitems %}
+    <script type="text/javascript">
+        $(function() {
+            open_sync("{{ mailbox }}/{{ page }}");
+            sync("{{ mailbox }}");
+        });
+        setInterval( function() {
+            sync("{{ mailbox }}");
+        }, 5*60*1000); // 5 minutes
+    </script>
+    <div id="thread-list">
+    </div>
+    <a href="{{ page_back }}">&lt;&lt;</a>
+    <a href="{{ page_next }}">&gt;&gt;</a>
+{% endblock %}

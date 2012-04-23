@@ -2,21 +2,17 @@
 {% import "w.html" as w %}
 {% block body %}
         <div id="firstpane">
-            {% if sync_button %}{{ w.button("Sync", sync_button, id="sync-button") }}{% endif %}
-            <div id="viewswitcher" class="modebutton">
-                {{ w.button("/static/img/rss/normalview.png", id="view1", img=true) }}
-                {{ w.button("/static/img/rss/fullview.png", active=true, img=true) }}
-            </div>
+                {% block rootelementstop %}{% endblock %}
             <ul id="rootelements">
-                {% block list %}{% endblock %}
+                {% block rootelements %}{% endblock %}
             </ul>
         </div>
-        <div id="content">
-            <div class="" id="mainsubdiv">
+        <div class="{% if default_list %}list{% endif %}" id="content">
+            <div id="mainsubdiv">
                 <div id="subitems-block">{% block subitems %}{% endblock %}</div>
             </div>
         </div>
-        <div id="sidebar">...</div>
+        <div id="sidebar">{% block sidebar %}{% endblock %}</div>
         <div class="clearer"></div>
         <div id="popup-background" class="popup-background">
             <div class="popup-wrapper">

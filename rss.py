@@ -143,7 +143,7 @@ def sync_feed(feedid):
 def ajax_feed(feedid):
     cur = g.db.execute("select name, id, pubDate, seen from articles where feed = " + str(feedid) + " order by articles.pubDate desc")
     subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3]) for row in cur.fetchall()]
-    return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
+    return jsonify(content=render_template("rss/rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
 
 @app.route("/ajax/seen/<int:article>/<int:seen>")
 def ajax_mark_seen(article, seen):
@@ -157,7 +157,7 @@ def ajax_mark_seen(article, seen):
 def ajax_unread():
     cur = g.db.execute("select articles.name, articles.id, articles.pubDate, articles.seen, feeds.name from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
     subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], sender=row[4]) for row in cur.fetchall()]
-    return jsonify(content=render_template("rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
+    return jsonify(content=render_template("rss/rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
 
 @app.route("/ajax/article/<int:article>/")
 def ajax_article(article):
@@ -173,14 +173,14 @@ def ajax_full_view_unread():
     date_formater.init_date()
     cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url, articles.feed from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
     feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6]), feedid=row[8]) for row in cur.fetchall()]
-    return jsonify(content=render_template("rss-ajax-thread.html", thread=feeds))
+    return jsonify(content=render_template("rss/rss-ajax-thread.html", thread=feeds))
 
 @app.route("/ajax/fullview/<int:article>/")
 def ajax_full_view(article):
     date_formater.init_date()
     cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url, articles.feed from articles, feeds where feeds.id = articles.feed and feeds.id = " + str(article) + " order by articles.pubDate desc")
     feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6]), feedid=row[8]) for row in cur.fetchall()]
-    return jsonify(content=render_template("rss-ajax-thread.html", thread=feeds))
+    return jsonify(content=render_template("rss/rss-ajax-thread.html", thread=feeds))
 
 @app.route("/sync/<int:feedid>/")
 def sync(feedid):
@@ -202,7 +202,7 @@ def sync_all():
         sync_feed(row[0])
     # Get the feeds
     feeds = get_feed_list()
-    return jsonify(done=1, content=render_template("rss-ajax-firstpane.html", feeds=feeds))
+    return jsonify(done=1, content=render_template("rss/rss-ajax-firstpane.html", feeds=feeds))
 
 @app.route("/", methods=["POST", "GET"])
 def root():
@@ -211,7 +211,7 @@ def root():
 
     # Get the feeds
     feeds = get_feed_list()
-    return render_template("rss.html", feeds=feeds, sync_button="sync_all_rss()")
+    return render_template("rss/rss.html", feeds=feeds, sync_button="sync_all_rss()")
 
 def init_db():
     with closing(sqlite3.connect(DATABASE)) as db:

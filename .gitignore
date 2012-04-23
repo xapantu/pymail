@@ -1,6 +1,6 @@
 email.db
 db/
-rss/
+/rss/
 *.swp
 *.pyc
 :

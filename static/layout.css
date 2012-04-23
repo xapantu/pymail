@@ -1,4 +1,6 @@
-
+body {
+overflow:hidden;
+}
 .list .date {
     font-size:1em;
 }
@@ -110,4 +112,62 @@
     margin-top:-1.5em;
     width:auto;
     float:right;
+}
+
+.message.unread .mark-read {
+    display:block;
+}
+.message.unread .mark-unread {
+    display:none;
+}
+.message .mark-read {
+    display:none;
+}
+
+.hiddenbottom {
+    position:absolute;
+    top:100%;
+    left:0;
+    margin-top:0em;
+    height:4em;
+    border-top:1px solid lightgrey;
+    width:17em;
+    font-size:0.9em;
+    text-align:center;
+}
+
+#progresstext {
+    display: block;
+    width:100%;
+    float:none;
+}
+#progressimg {
+    display:inline;
+}
+
+.button, .linkable {
+    cursor:pointer;
+}
+
+#viewswitcher {
+    float:right;
+}
+
+.rss .list .sender {
+    font-size:1.1em;
+    color:purple;
+}
+
+.modebutton .button img {
+    display: block;
+}
+.modebutton .button > span > span {
+    margin:0.1em;
+    display: block;
+}
+
+.rss .message-content {
+}
+.rss .message-content p {
+    text-indent:1em;
 }

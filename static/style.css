@@ -133,7 +133,7 @@ a:active, a:focus {
     font-size:0.9em;
     border-right: 1px solid #bbb;
 }
-#mailboxes li a span, #firstpane li a span {
+#mailboxes li a span, #firstpane li a > span {
     padding: 0.3em;
     display:block;
     padding-left: 0.8em;

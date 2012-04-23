@@ -16,17 +16,20 @@
             $("#popup-background").hide();
         }
         function sync_all_rss() {
+            set_progress_text("Syncing with remote servers...");
+            show_progress();
             $("#sync-button").addClass("insensitive");
-            $("#rootelements").html("<li><img src='{{ url_for('static', filename='loading.gif') }}' class='loading' /></li>");
             $.getJSON("/sync", {}, function(data) {
-                    $("#rootelements").html(data.content);
-                    $("#sync-button").removeClass("insensitive");
+                $("#rootelements").html(data.content);
+                $("#sync-button").removeClass("insensitive");
+                hide_progress();
             });
         }
 
         $(function(){
-            $("#viewswitcher > a").click(function(object) {
+            $("#viewswitcher > *").click(function(object) {
                 view_normal = $(this).attr("id") == "view1";
+                $("#subitems-block").html("");
                 if (view_normal) {
                     $("#mainsubdiv").addClass("list");
                 }
@@ -36,6 +39,9 @@
                 }
                 load_subitems(rootitem_selected, '/ajax/feed/' + rootitem_selected, '/ajax/fullview/' + rootitem_selected);
             });
+        });
+        $(function() {
+            load_subitems(-1, '/ajax/feed/-1', '/ajax/fullview/-1');
         });
     </script>
     <script type="text/javascript" src="{{ url_for("static", filename="layout.js") }}"></script>

@@ -4,8 +4,8 @@
         <div id="firstpane">
             {% if sync_button %}{{ w.button("Sync", sync_button, id="sync-button") }}{% endif %}
             <div id="viewswitcher" class="modebutton">
-                {{ w.button("1", id="view1") }}
-                {{ w.button("2", active=true) }}
+                {{ w.button("/static/img/rss/normalview.png", id="view1", img=true) }}
+                {{ w.button("/static/img/rss/fullview.png", active=true, img=true) }}
             </div>
             <ul id="rootelements">
                 {% block list %}{% endblock %}
@@ -31,5 +31,9 @@
             </div>
             </div>
        </div> 
+        <div class="hiddenbottom">
+            <span id="progresstext">Some funny text</span>
+            <span id="progressbar"><img src='/static/loading.gif' class='loading' /></span>
+        </div>
 
 {% endblock %}

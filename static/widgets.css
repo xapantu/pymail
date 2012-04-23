@@ -80,7 +80,7 @@ a:focus {
     display:table;
     box-shadow: 0px 0px 2px #aaa;
     width:auto;
-    margin-top:0.4em;
+    margin:0.5em;
 }
 
 .modebutton > .button {

@@ -1,3 +1,9 @@
-{%- macro button(content, target=';', insensitive=False, id=None, active=false) -%}
-<a {% if id != None %}id="{{ id }}"{% endif %}class="button {% if active %}active {% endif %}{% if insensitive %}insensitive{% endif %}" href="javascript:{{ target }}"><span><span>{{ content }}</span></span></a>
+{%- macro button(content, target=';', insensitive=False, id=None, active=false, img=false) -%}
+<span {% if id != None %}id="{{ id }}"{% endif %}class="button {% if active %}active {% endif %}{% if insensitive %}insensitive{% endif %}" onclick="{{ target }}"><span><span>
+            {% if img %}
+            <img src="{{content}}" />
+            {% else %}
+            {{ content }}
+            {% endif %}
+</span></span></span>
 {%- endmacro %}

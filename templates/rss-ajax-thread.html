@@ -10,7 +10,11 @@
             <div class="clearer"></div>
         </div>
         <div class="message-content content">
-            <p class="button-box">{{ w.button("Mark as read", "javascript:mark_as_read(%s)" % message.imapid) }}<div class="clearer"></div></p>
+            <p class="button-box">
+                <span class="mark-read">{{ w.button("Mark as read", "javascript:mark_as_read(%s, %s)" % (message.imapid, message.feedid)) }}</span>
+                <span class="mark-unread">{{ w.button("Mark as unread", "javascript:mark_as_unread(%s, %s)" % (message.imapid, message.feedid)) }}</span>
+                <div class="clearer"></div>
+            </p>
             {% autoescape false %}
             {{message.body}}
             {% endautoescape %}

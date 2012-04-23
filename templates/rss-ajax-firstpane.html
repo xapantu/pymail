@@ -3,7 +3,7 @@
 {% for feed in feeds %}
     <li id="feed-{{feed.id}}" {% if feed.unread > 0 %}class="unread"{% endif %}>
     <a href="javascript:load_subitems({{ feed.id }}, '/ajax/feed/{{ feed.id }}/', '/ajax/fullview/{{feed.id}}/')">
-        <span>{{ feed.name }}  {% if feed.unread > 0 %}({{ feed.unread }}){% endif %}</span>
+        <span>{{ feed.name }}<span {% if feed.unread == 0 %}style="display:none;"{% endif %}> (<span id="unread-count-{{feed.id}}">{{ feed.unread }}</span>)</span></span>
          </a>
     </li>
 {% else %}

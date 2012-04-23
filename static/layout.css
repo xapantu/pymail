@@ -94,3 +94,20 @@
 .rss .unread .sender {
     font-weight:bold;
 }
+
+.message-content.content {
+    background-color:transparent;
+}
+
+.rss .message .sender {
+    padding-right:7em;
+    display:block;
+    float:none;
+    width:auto;
+}
+
+.rss .message .date {
+    margin-top:-1.5em;
+    width:auto;
+    float:right;
+}

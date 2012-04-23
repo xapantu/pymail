@@ -1,6 +1,5 @@
 body {
     background-color:#dedede;
-    font-size:0.95em;
     font-family:sans-serif;
 
 /*    -webkit-touch-callout: none;
@@ -226,4 +225,9 @@ display:none;
 
 .softemail {
     color:rgba(0,0,0,.4);
+}
+
+.button-box {
+    margin-top:-1em;
+    margin-bottom:0;
 }

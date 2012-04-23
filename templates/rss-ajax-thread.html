@@ -1,4 +1,5 @@
 <h4>{{ subject }}</h4>
+{% import "w.html" as w %}
 {% for message in thread %}
 <div id="message-{{ message.imapid }}" class="message {% if not message.seen %}unread{% endif %} {% if message.seen and hide_first_mails %}email-hidden{% endif %} {{ loop.cycle('message-odd', 'message-even') }}">
         <div class="header" onclick="javascript:expand_thread('message-{{ message.imapid }}')">
@@ -8,8 +9,8 @@
             <div class="date">{{message.date}}</div>
             <div class="clearer"></div>
         </div>
-        <div class="message-content">
-            <a href="javascript:mark_as_read({{message.imapid}})">Mark as read</a>
+        <div class="message-content content">
+            <p class="button-box">{{ w.button("Mark as read", "javascript:mark_as_read(%s)" % message.imapid) }}<div class="clearer"></div></p>
             {% autoescape false %}
             {{message.body}}
             {% endautoescape %}

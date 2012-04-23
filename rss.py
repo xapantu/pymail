@@ -110,6 +110,8 @@ def sync_feed(feedid):
             page = urllib2.urlopen(row[1])
             soup = BeautifulSoup(page)
             url = soup.find("link", {"type": "application/rss+xml"}).attrMap["href"]
+            if "://" not in url:
+                url = "/".join(row[1].split("/")[0:-1]) + "/" + url
             app.logger.debug("Switch to %s for %s" % (url, row[1]))
             g.db.execute("update feeds set url = (?) where id = " + str(feedid), (url,))
             g.db.commit()
@@ -161,7 +163,6 @@ def ajax_unread():
 def ajax_article(article):
     cur = g.db.execute("select content, name, seen from articles where id = " + str(article))
     data = cur.fetchall()[0]
-    app.logger.debug(data)
     if data[2] == 0:
         g.db.execute("update articles set seen = 1 where id = " + str(article))
         g.db.commit()

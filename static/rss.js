@@ -86,6 +86,7 @@ $(function(){
         
         load_subitems(ROOTITEM_SELECTED, '/ajax/feed/' + ROOTITEM_SELECTED, '/ajax/fullview/' + ROOTITEM_SELECTED);
     });
+    $("#viewswitcher .active").click();
 });
 
 $(function() {

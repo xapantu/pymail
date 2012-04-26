@@ -9,7 +9,7 @@
             {{ w.button("Sync", "sync_all_rss()", id="sync-button") }}
             {{ w.button("All read", "mark_all_read()", id="read-button") }}
             <div id="viewswitcher" class="modebutton">
-                {{ w.button("/static/img/rss/normalview.png", id="view1", img=true) }}
-                {{ w.button("/static/img/rss/fullview.png", active=true, img=true) }}
+                {{ w.button("/static/img/rss/normalview.png", active=(not fullview_default), id="view1", img=true) }}
+                {{ w.button("/static/img/rss/fullview.png", active=fullview_default, img=true) }}
             </div>
 {% endblock %}

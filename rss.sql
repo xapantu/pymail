@@ -1,5 +1,6 @@
 drop table if exists feeds;
 drop table if exists articles;
+drop table if exists configuration;
 
 create table feeds (
     id integer primary key autoincrement,
@@ -17,3 +18,8 @@ create table articles (
     name string,
     content string
 );
+create table configuration (
+    key string,
+    value string
+);
+insert into configuration (key, value) values ("view-mode", "1");

@@ -139,12 +139,6 @@ def sync_feed(feedid):
             g.db.execute("insert into articles (name, url, guid, content, feed, pubDate, seen) values (?, ?, ?, ?, ?, ?, 0)", (article["title"], article["link"], article["guid"], article["description"], feedid, article["pubDate"]))
     g.db.commit()
 
-@app.route("/ajax/feed/<int:feedid>/")
-def ajax_feed(feedid):
-    cur = g.db.execute("select name, id, pubDate, seen, feed from articles where feed = " + str(feedid) + " order by articles.pubDate desc")
-    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], feed=row[4]) for row in cur.fetchall()]
-    return jsonify(content=render_template("rss/rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
-
 @app.route("/ajax/seen/<int:article>/<int:seen>")
 def ajax_mark_seen(article, seen):
     #FIXME: investigate wether the int: is enough to avoid a sql injection, not sure right now
@@ -167,11 +161,24 @@ def ajax_mark_all_seen(seen):
     return jsonify(done=1)
 
 
+def save_view_mode(mode):
+    g.db.execute("update configuration set value = '" + str(mode) + "' where key = 'view-mode'")
+    g.db.commit()
+
 @app.route("/ajax/feed/-1")
 def ajax_unread():
-    cur = g.db.execute("select articles.name, articles.id, articles.pubDate, articles.seen, feeds.name from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
-    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], sender=row[4]) for row in cur.fetchall()]
+    save_view_mode(0)
+    cur = g.db.execute("select articles.name, articles.id, articles.pubDate, articles.seen, feeds.name, feeds.id from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
+    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], sender=row[4], feed=row[5]) for row in cur.fetchall()]
     return jsonify(content=render_template("rss/rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
+
+@app.route("/ajax/feed/<int:feedid>/")
+def ajax_feed(feedid):
+    save_view_mode(0)
+    cur = g.db.execute("select name, id, pubDate, seen, feed from articles where feed = " + str(feedid) + " order by articles.pubDate desc")
+    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], feed=row[4]) for row in cur.fetchall()]
+    return jsonify(content=render_template("rss/rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
+
 
 @app.route("/ajax/article/<int:article>/")
 def ajax_article(article):
@@ -182,6 +189,7 @@ def ajax_article(article):
 
 @app.route("/ajax/fullview/-1")
 def ajax_full_view_unread():
+    save_view_mode(1)
     date_formater.init_date()
     cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url, articles.feed from articles, feeds where feeds.id = articles.feed and seen = 0 order by articles.pubDate desc")
     feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6]), feedid=row[8]) for row in cur.fetchall()]
@@ -189,6 +197,7 @@ def ajax_full_view_unread():
 
 @app.route("/ajax/fullview/<int:article>/")
 def ajax_full_view(article):
+    save_view_mode(1)
     date_formater.init_date()
     cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url, articles.feed from articles, feeds where feeds.id = articles.feed and feeds.id = " + str(article) + " order by articles.pubDate desc")
     feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6]), feedid=row[8]) for row in cur.fetchall()]
@@ -223,7 +232,9 @@ def root():
 
     # Get the feeds
     feeds = get_feed_list()
-    return render_template("rss/rss.html", feeds=feeds)
+    cur = g.db.execute("select value from configuration where key = 'view-mode'")
+    fullview_default = int(cur.fetchall()[0][0]) == 1
+    return render_template("rss/rss.html", feeds=feeds, fullview_default=fullview_default)
 
 def init_db():
     with closing(sqlite3.connect(DATABASE)) as db:

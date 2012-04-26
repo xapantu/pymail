@@ -1,7 +1,7 @@
 <ul class=entries>
     {% for entry in subitems %}
     <li id="entry-{{entry.id}}" class="{% if not entry.seen %}unread{% endif %}">
-    <a href="javascript:load_sidebar({{entry.id}}, '{{subitems_target}}{{entry.id}}')" class="{{ loop.cycle('odd', 'even') }}">
+    <a href="javascript:load_sidebar({{entry.id}}, '{{subitems_target}}{{entry.id}}'); mark_as_read({{entry.id}}, {{entry.feed}})" class="{{ loop.cycle('odd', 'even') }}">
         {% if entry.sender %}
         <span>
             <span class="sender">{{ entry.sender }}</span>

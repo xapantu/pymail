@@ -61,7 +61,7 @@ overflow:hidden;
     border-top:1px solid lightgrey;
     border-radius:0;
 }
-.rss #subitems-block > .message:nth-child(2) {
+.rss div > .message:nth-child(2) {
     border-top:none;
 }
 

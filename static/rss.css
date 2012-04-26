@@ -1,0 +1,28 @@
+.rss .message-content p:first-child {
+    text-indent:0;
+}
+
+/* Toolbar */
+
+.toptools {
+    background-color:#dcdcdc;
+    border-bottom:1px solid #888;
+    border-right:1px solid #888;
+    width:100%;
+    background-image: linear-gradient(top, #dcdcdc 0%, #c2c2c2 90%);
+    background-image: -moz-linear-gradient(top, #dcdcdc 0%, #c2c2c2 90%);
+    background-image: -webkit-linear-gradient(top, #dcdcdc 0%, #c2c2c2 90%);
+}
+
+.toptools .button, .toptools .modebutton {
+    margin:0.3em;
+}
+
+.toptools .button > span > span {
+    padding-left:0.3em;
+    padding-right:0.3em;
+}
+
+.toptools .modebutton .button img {
+}
+

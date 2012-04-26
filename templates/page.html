@@ -4,10 +4,14 @@
         <title>App</title>
         <link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
         <link rel=stylesheet type=text/css href="{{ url_for('static', filename='widgets.css') }}">
+        <link rel=stylesheet type=text/css href="{{ url_for('static', filename=class + '.css') }}">
+        <link rel=stylesheet type=text/css href="{{ url_for('static', filename=class + '-layout.css') }}">
         <script type=text/javascript src="{{ url_for('static', filename='jquery-1.7.2.min.js') }}" ></script>
         <script type="text/javascript" src="{{ url_for('static', filename='utils.js') }}"></script>
         <script type="text/javascript" src="{{ url_for('static', filename='widgets.js') }}"></script>
-        {% block script %}{% endblock %}
+        <script type="text/javascript" src="{{ url_for('static', filename=class + '.js') }}"></script>
+        <script type="text/javascript" src="{{ url_for("static", filename="layout.js") }}"></script>
+        {% block header %}{% endblock %}
     </head>
     <body class="{{ class }}">
         {% block body %}{% endblock %}

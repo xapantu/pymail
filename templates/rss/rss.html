@@ -6,53 +6,10 @@
 {% endblock %}
 
 {% block rootelementstop %}
-            {% if sync_button %}{{ w.button("Sync", sync_button, id="sync-button") }}{% endif %}
+            {{ w.button("Sync", "sync_all_rss()", id="sync-button") }}
+            {{ w.button("All read", "mark_all_read()", id="read-button") }}
             <div id="viewswitcher" class="modebutton">
                 {{ w.button("/static/img/rss/normalview.png", id="view1", img=true) }}
                 {{ w.button("/static/img/rss/fullview.png", active=true, img=true) }}
             </div>
-{% endblock %}
-
-{% block script %}
-    <script type="text/javascript">
-        function add_feed() {
-            $("#popup-block-content").html('<form method="POST" action"/">'
-                    + '<input type="text" name="new_feed" placeholder="Feed URI..." class="entry" />'
-                    + '<input type="submit" value="Add" /></form>');
-            $("#popup-block-header").html("Add a feed");
-            $("#popup-background").show();
-        }
-        function close_popup() {
-            $("#popup-background").hide();
-        }
-        function sync_all_rss() {
-            set_progress_text("Syncing with remote servers...");
-            show_progress();
-            $("#sync-button").addClass("insensitive");
-            $.getJSON("/sync", {}, function(data) {
-                $("#rootelements").html(data.content);
-                $("#sync-button").removeClass("insensitive");
-                hide_progress();
-            });
-        }
-
-        $(function(){
-            $("#viewswitcher > *").click(function(object) {
-                view_normal = $(this).attr("id") == "view1";
-                $("#subitems-block").html("");
-                if (view_normal) {
-                    $("#mainsubdiv").addClass("list");
-                }
-                else {
-                    $("#mainsubdiv").removeClass("list");
-                    hide_sidebar();
-                }
-                load_subitems(rootitem_selected, '/ajax/feed/' + rootitem_selected, '/ajax/fullview/' + rootitem_selected);
-            });
-        });
-        $(function() {
-            load_subitems(-1, '/ajax/feed/-1', '/ajax/fullview/-1');
-        });
-    </script>
-    <script type="text/javascript" src="{{ url_for("static", filename="layout.js") }}"></script>
 {% endblock %}

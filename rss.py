@@ -141,14 +141,28 @@ def sync_feed(feedid):
 
 @app.route("/ajax/feed/<int:feedid>/")
 def ajax_feed(feedid):
-    cur = g.db.execute("select name, id, pubDate, seen from articles where feed = " + str(feedid) + " order by articles.pubDate desc")
-    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3]) for row in cur.fetchall()]
+    cur = g.db.execute("select name, id, pubDate, seen, feed from articles where feed = " + str(feedid) + " order by articles.pubDate desc")
+    subitems = [dict(subject=row[0], id=row[1], date=date_formater.format_date(row[2]), seen=row[3], feed=row[4]) for row in cur.fetchall()]
     return jsonify(content=render_template("rss/rss-ajax-subitems.html", subitems=subitems, subitems_target="/ajax/article/"))
 
 @app.route("/ajax/seen/<int:article>/<int:seen>")
 def ajax_mark_seen(article, seen):
     #FIXME: investigate wether the int: is enough to avoid a sql injection, not sure right now
     g.db.execute("update articles set seen = " + str(seen) + " where id = " + str(article))
+    app.logger.debug("update articles set seen = " + str(seen) + " where id = " + str(article))
+    g.db.commit()
+    return jsonify(done=1)
+
+@app.route("/ajax/seen/feed/<int:article>/<int:seen>")
+def ajax_mark_seen_feed(article, seen):
+    #FIXME: investigate wether the int: is enough to avoid a sql injection, not sure right now
+    g.db.execute("update articles set seen = " + str(seen) + " where feed = " + str(article))
+    g.db.commit()
+    return jsonify(done=1)
+
+@app.route("/ajax/seen/feed/-1/<int:seen>")
+def ajax_mark_all_seen(seen):
+    g.db.execute("update articles set seen = " + str(seen))
     g.db.commit()
     return jsonify(done=1)
 
@@ -161,12 +175,10 @@ def ajax_unread():
 
 @app.route("/ajax/article/<int:article>/")
 def ajax_article(article):
-    cur = g.db.execute("select content, name, seen from articles where id = " + str(article))
-    data = cur.fetchall()[0]
-    if data[2] == 0:
-        g.db.execute("update articles set seen = 1 where id = " + str(article))
-        g.db.commit()
-    return jsonify(content=data[0])
+    date_formater.init_date()
+    cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url, articles.feed from articles, feeds where feeds.id = articles.feed and articles.id = " + str(article) + " order by articles.pubDate desc")
+    feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6]), feedid=row[8]) for row in cur.fetchall()]
+    return jsonify(content=render_template("rss/rss-ajax-thread.html", thread=feeds))
 
 @app.route("/ajax/fullview/-1")
 def ajax_full_view_unread():
@@ -211,7 +223,7 @@ def root():
 
     # Get the feeds
     feeds = get_feed_list()
-    return render_template("rss/rss.html", feeds=feeds, sync_button="sync_all_rss()")
+    return render_template("rss/rss.html", feeds=feeds)
 
 def init_db():
     with closing(sqlite3.connect(DATABASE)) as db:

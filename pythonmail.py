@@ -534,7 +534,7 @@ def start():
         db.commit()
         update_imap_accounts_list(db)
     db.close()
-    return render_template("email/email-home.html", accounts=IMAP_ACCOUNTS)
+    return render_template("email/email-home.html", accounts=IMAP_ACCOUNTS, page_class="email-home")
 
 @app.route("/ajax/threadslist/<int:account>/<mailbox>/<int:page>")
 def view_thread_list(account, mailbox, page):
@@ -606,6 +606,7 @@ def view_thread(account, mailbox, page):
             emails=mails_id,
             mailbox=mailbox,
             accounts=IMAP_ACCOUNTS,
+            page_class="email",
             mailboxes=mail.mailboxes_synced)
 
 @app.route("/sync/<int:account>/")

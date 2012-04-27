@@ -234,7 +234,7 @@ def root():
     feeds = get_feed_list()
     cur = g.db.execute("select value from configuration where key = 'view-mode'")
     fullview_default = int(cur.fetchall()[0][0]) == 1
-    return render_template("rss/rss.html", feeds=feeds, fullview_default=fullview_default)
+    return render_template("rss/rss.html", feeds=feeds, fullview_default=fullview_default, page_class="rss")
 
 def init_db():
     with closing(sqlite3.connect(DATABASE)) as db:

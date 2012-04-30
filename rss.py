@@ -1,9 +1,9 @@
 #! /usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-from geventwebsocket.handler import WebSocketHandler
-import geventwebsocket
-from gevent.pywsgi import WSGIServer
+#from geventwebsocket.handler import WebSocketHandler
+#import geventwebsocket
+#from gevent.pywsgi import WSGIServer
 
 from flask import Flask, render_template, session, request, redirect, url_for, jsonify, g
 from contextlib import closing
@@ -27,6 +27,8 @@ app.config.from_object(__name__)
 @app.before_request
 def before_request():
     g.db = sqlite3.connect(app.config['DATABASE'])
+    import rss_db
+    g.al = rss_db.FeedsDatabase()
     date_formater.init_date()
 
 @app.teardown_request
@@ -136,8 +138,8 @@ def ajax_full_view_unread():
 def ajax_full_view(article):
     save_view_mode(1)
     date_formater.init_date()
-    cur = g.db.execute("select feeds.url, articles.name, articles.id, articles.content, articles.seen, feeds.name, articles.pubDate, articles.url, articles.feed from articles, feeds where feeds.id = articles.feed and feeds.id = " + str(article) + " order by articles.pubDate desc")
-    feeds = [dict(sender=(row[1], row[5], row[7]), imapid=row[2], seen=row[4], body=row[3] + "<div class=\"clearer\"></div>", date=date_formater.format_date(row[6]), feedid=row[8]) for row in cur.fetchall()]
+    cur = g.al.get_articles_for_feed(article)
+    feeds = [dict(sender=(art.name, feed.url, art.url), imapid=art.id, seen=art.seen, body=art.content + "<div class=\"clearer\"></div>", date=date_formater.format_date(art.pubDate), feedid=art.feed) for art, feed in cur]
     return jsonify(content=render_template("rss/rss-ajax-thread.html", thread=feeds))
 
 @app.route("/sync/<int:feedid>/")
@@ -151,11 +153,7 @@ def sync(feedid):
     return jsonify(done=success)
 
 def get_feed_list():
-    cur = g.db.execute("select url, name, id from feeds")
-    feeds = [dict(url=row[0], name=row[1], id=row[2]) for row in cur.fetchall()]
-    for feed in feeds:
-        cur = g.db.execute("select count(id) from articles where feed = " + str(feed["id"]) + " and seen = 0")
-        feed["unread"] = cur.fetchall()[0][0]
+    feeds = g.al.get_all_feeds()
     return feeds
 
 @app.route("/sync")
@@ -179,8 +177,8 @@ def root():
 
     # Get the feeds
     feeds = get_feed_list()
-    cur = g.db.execute("select value from configuration where key = 'view-mode'")
-    fullview_default = int(cur.fetchall()[0][0]) == 1
+    cur = g.al.get_conf("view-mode")
+    fullview_default = int(cur) == 1
     return render_template("rss/rss.html", feeds=feeds, fullview_default=fullview_default, page_class="rss")
 
 def init_db():

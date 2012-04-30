@@ -1,13 +1,21 @@
 #! /usr/bin/env python2
 # -*- coding: utf-8 -*-
 
+from geventwebsocket.handler import WebSocketHandler
+import geventwebsocket
+from gevent.pywsgi import WSGIServer
+
 from flask import Flask, render_template, session, request, redirect, url_for, jsonify, g
 from contextlib import closing
 import sqlite3
 import xml.etree.ElementTree
 import email.utils
 import time
+import gevent
 import date_formater
+import threading
+import feedparser
+import urllib
 
 app = Flask(__name__)
 DATABASE = "rss/rss.sqlite"
@@ -26,70 +34,8 @@ def teardown_request(exception):
     g.db.close()
 
 def download_file(uri):
-    import urllib
     page = urllib.urlopen(uri)
     return page.read()
-
-def parse_item(item):
-    title = None
-    link = None
-    description = None
-    pubDate = None
-    guid = None
-
-    for node in item:
-        if node.tag == "title":
-            title = node.text
-        elif node.tag == "link":
-            link = node.text
-        elif node.tag == "description":
-            description = node.text
-        elif node.tag == "pubDate":
-            pubDate = time.strftime("%Y-%m-%d %H:%M:%S", email.utils.parsedate(node.text))
-        elif node.tag == "guid":
-            guid = node.text
-        else:
-            print("%s element not handled" % node.tag)
-
-    return dict(title=title, link=link, description=description, pubDate=pubDate, guid=guid)
-
-def parse_channel(channel):
-    title = None
-    language = None
-    description = None
-    link = None
-    articles = []
-
-    for node in channel:
-        if node.tag == "title":
-            title = node.text
-        elif node.tag == "link":
-            link = node.text
-        elif node.tag == "language":
-            language = node.text
-        elif node.tag == "description":
-            description = node.text
-        elif node.tag == "item":
-            articles.append(parse_item(node))
-        else:
-            print("%s element not handled" % node.tag)
-
-    return dict(articles=articles, title=title, language=language, description=description, link=link)
-
-def parse_xml(feed_uri):
-    data = download_file(feed_uri)
-
-    root_element = xml.etree.ElementTree.fromstring(data)
-    contents = []
-    if root_element.tag != "rss":
-        raise NameError("The root element is not rss, it may be a html file")
-    for channel in root_element:
-        if channel.tag != "channel": # another node?? not valid, let's skip it
-            print("Root element contains a node of type %s" % channel.tag)
-        else:
-            contents.append(parse_channel(channel))
-    return contents
-    
 
 def add_feed(feed_name):
     if "://" not in feed_name:
@@ -97,46 +43,37 @@ def add_feed(feed_name):
     g.db.execute("insert into feeds (url, name) values (?, ?)", (feed_name,feed_name))
     g.db.commit()
 
+class NoFeedFound(Exception):
+    pass
+
 def sync_feed(feedid):
     cur = g.db.execute("select name, url from feeds where id = " + str(feedid))
     row = cur.fetchall()[0]
-    try:
-        content = parse_xml(row[1])[0]
-    except:
-        # Hum, maybe it is not a feed :)
-        try:
-            from BeautifulSoup import BeautifulSoup
-            import urllib2
-            page = urllib2.urlopen(row[1])
-            soup = BeautifulSoup(page)
-            url = soup.find("link", {"type": "application/rss+xml"}).attrMap["href"]
-            if "://" not in url:
-                url = "/".join(row[1].split("/")[0:-1]) + "/" + url
-            app.logger.debug("Switch to %s for %s" % (url, row[1]))
-            g.db.execute("update feeds set url = (?) where id = " + str(feedid), (url,))
-            g.db.commit()
-            content = parse_xml(url)[0]
-        except ImportError:
-            g.db.execute("update feeds set name = (?) where id = " + str(feedid), ("Feed not valid, install beautifoul soup for autodetection",))
-            g.db.commit()
-            return
-        except:
-            g.db.execute("update feeds set name = (?) where id = " + str(feedid), ("Feed not valid, couldn't autodetect it :(",))
-            g.db.commit()
-            raise
-            return
-    app.logger.debug(content["title"])
-    if content["title"] != row[0]:
-        g.db.execute("update feeds set name = (?) where id = " + str(feedid), (content["title"],))
+    data = feedparser.parse(row[1])
+    if data["feed"].has_key("html"):
+        # Okay, it is a webpage, let's detect the feed
+        for link in data["feed"]["links"]:
+            if link["type"] == "application/atom+xml":
+                url = link["url"]
+                g.db.execute("update feeds set url = (?) where id = " + str(feedid), (url,))
+                g.db.commit()
+                data = feedparser.parse(url)
+                app.logger.debug("Switch to URL %s for %s." % (url, row[1]))
+                break
+    if data["feed"].has_key("html") or not (data["feed"].has_key("title")):
+        raise NoFeedFound("Couldn't use this URL %s : no rss found there." % url)
+    app.logger.debug(data["feed"]["title"])
+    if data["feed"]["title"] != row[0]:
+        g.db.execute("update feeds set name = (?) where id = " + str(feedid), (data["feed"]["title"],))
         g.db.commit()
 
     # We check wether each article is in the db
-    for article in content["articles"]:
+    for article in data["entries"]:
         # How many article with this id?
-        cur = g.db.execute("select count(id) from articles where guid = (?) and feed = (?)", (article["guid"], feedid))
+        cur = g.db.execute("select count(id) from articles where guid = (?) and feed = (?)", (article["id"], feedid))
         count = cur.fetchall()[0][0]
         if count == 0:
-            g.db.execute("insert into articles (name, url, guid, content, feed, pubDate, seen) values (?, ?, ?, ?, ?, ?, 0)", (article["title"], article["link"], article["guid"], article["description"], feedid, article["pubDate"]))
+            g.db.execute("insert into articles (name, url, guid, content, feed, pubDate, seen) values (?, ?, ?, ?, ?, ?, 0)", (article["title"], article["link"], article["id"], article["description"], feedid, time.strftime("%Y-%m-%d %H:%M:%S", article["updated_parsed"])))
     g.db.commit()
 
 @app.route("/ajax/seen/<int:article>/<int:seen>")
@@ -205,8 +142,13 @@ def ajax_full_view(article):
 
 @app.route("/sync/<int:feedid>/")
 def sync(feedid):
-    sync_feed(feedid)
-    return "done"
+    success = True
+    try:
+        sync_feed(feedid)
+    except NoFeedFound as e:
+        app.logger.debug(e)
+        success = False
+    return jsonify(done=success)
 
 def get_feed_list():
     cur = g.db.execute("select url, name, id from feeds")
@@ -219,11 +161,16 @@ def get_feed_list():
 @app.route("/sync")
 def sync_all():
     cur = g.db.execute("select id from feeds")
+    success = True
     for row in cur.fetchall():
-        sync_feed(row[0])
+        try:
+            sync_feed(row[0])
+        except NoFeedFound as e:
+            app.logger.debug(e)
+            success = False
     # Get the feeds
     feeds = get_feed_list()
-    return jsonify(done=1, content=render_template("rss/rss-ajax-firstpane.html", feeds=feeds))
+    return jsonify(done=success, content=render_template("rss/rss-ajax-firstpane.html", feeds=feeds))
 
 @app.route("/", methods=["POST", "GET"])
 def root():
@@ -242,6 +189,43 @@ def init_db():
             db.cursor().executescript(f.read())
         db.commit()
 
+def check_timed(ws, db, event):
+    #ws, db = data
+    i = 0
+    while True:
+        i += 1
+        #ws.send('{ "message" : "%s" }' % ("i: %s" % i))
+        #cur = db.execute("select * from configuration")
+        #print cur.fetchall()
+        print "a"
+        if event.is_set():
+            print "break"
+            break
+        time.sleep(1)
+
+@app.route("/api")
+def api():
+    if request.environ.get('wsgi.websocket'):
+        ws = request.environ['wsgi.websocket']
+        #green = gevent.spawn(check_timed, (ws, g.db))
+        event = threading.Event()
+        th = threading.Thread(None, check_timed, None, (ws, g.db, event))
+        th.start()
+        print("greenlet launched")
+        try:
+            while True:
+                message = ws.receive()
+                ws.send('{ "message" : "%s" }' % message)
+        except geventwebsocket.WebSocketError:
+            event.set()
+        #green.kill()
+    return ""
+
 if __name__ == "__main__":
     app.debug = True
     app.run(port=5001)
+
+#if __name__ == '__main__':
+#    app.debug = True
+#    http_server = WSGIServer(('',5001), app, handler_class=WebSocketHandler)
+#    http_server.serve_forever()

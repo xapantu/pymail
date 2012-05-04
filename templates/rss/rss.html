@@ -12,21 +12,11 @@
                 {{ w.button("/static/img/rss/normalview.png", active=(not fullview_default), id="view1", img=true) }}
                 {{ w.button("/static/img/rss/fullview.png", active=fullview_default, img=true) }}
             </div>
-            <!--<div id="log">log</div>-->
 {% endblock %}
 
 {% block header %}
     <script type="text/javascript">
-        /*$(document).ready(function(){                                            
-            if ("WebSocket" in window) {                                         
-                ws = new WebSocket("ws://" + document.domain + ":5001/api");                
-                ws.onmessage = function (msg) { 
-                    eval("data = " + msg.data + ";");
-                    $("#log").html("<p>"+data.message+"</p>")                      
-                };                                                               
-            } else {                                                             
-                alert("WebSocket not supported");                                
-            }                                                                    
-        });*/                                                                      
+        $("#log").click(function(){
+        });
     </script>
 {% endblock %}

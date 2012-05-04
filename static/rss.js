@@ -63,12 +63,28 @@ function sync_all_rss() {
     set_progress_text("Syncing with remote servers...");
     show_progress();
     $("#sync-button").addClass("insensitive");
-    $.getJSON("/sync", {}, function(data) {
+            if ("WebSocket" in window) {                                         
+                ws = new WebSocket("ws://" + document.domain + ":5001/api/sync");
+                ws.onmessage = function (msg) { 
+                    eval("data = " + msg.data + ";");
+                    if(data.done == undefined)
+                        set_progress_text("Syncing " + data.message + "...");
+                    else {
+                        ws.send("close");
+                        hide_progress();
+                        $("#sync-button").removeClass("insensitive");
+                        load_subitems(ROOTITEM_SELECTED, '/ajax/feed/' + ROOTITEM_SELECTED, '/ajax/fullview/' + ROOTITEM_SELECTED);
+                    }
+                };
+            } else {                                                             
+                alert("WebSocket not supported");
+            }                                                                    
+    /*$.getJSON("/sync", {}, function(data) {
         $("#rootelements").html(data.content);
         $("#sync-button").removeClass("insensitive");
         hide_progress();
         load_subitems(ROOTITEM_SELECTED, '/ajax/feed/' + ROOTITEM_SELECTED, '/ajax/fullview/' + ROOTITEM_SELECTED);
-    });
+    });*/
 }
 
 /* This may be better in layout.js, needs investigation */

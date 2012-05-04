@@ -1,9 +1,9 @@
 #! /usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-#from geventwebsocket.handler import WebSocketHandler
-#import geventwebsocket
-#from gevent.pywsgi import WSGIServer
+from geventwebsocket.handler import WebSocketHandler
+import geventwebsocket
+from gevent.pywsgi import WSGIServer
 
 from flask import Flask, render_template, session, request, redirect, url_for, jsonify, g
 from contextlib import closing
@@ -48,35 +48,40 @@ def add_feed(feed_name):
 class NoFeedFound(Exception):
     pass
 
-def sync_feed(feedid):
-    cur = g.db.execute("select name, url from feeds where id = " + str(feedid))
+def sync_feed(feedid, db):
+    print "start sync_feed"
+    cur = db.execute("select name, url from feeds where id = " + str(feedid))
     row = cur.fetchall()[0]
+    print "request done"
     data = feedparser.parse(row[1])
+    print "feed parsed and retrieved"
     if data["feed"].has_key("html"):
         # Okay, it is a webpage, let's detect the feed
         for link in data["feed"]["links"]:
-            if link["type"] == "application/atom+xml":
+            if link["type"] == "application/atom+xml" or link["type"] == "aplication/rss+xml":
                 url = link["url"]
-                g.db.execute("update feeds set url = (?) where id = " + str(feedid), (url,))
-                g.db.commit()
+                db.execute("update feeds set url = (?) where id = " + str(feedid), (url,))
+                db.commit()
                 data = feedparser.parse(url)
                 app.logger.debug("Switch to URL %s for %s." % (url, row[1]))
                 break
+        print "parsed"
     if data["feed"].has_key("html") or not (data["feed"].has_key("title")):
         raise NoFeedFound("Couldn't use this URL %s : no rss found there." % url)
     app.logger.debug(data["feed"]["title"])
     if data["feed"]["title"] != row[0]:
-        g.db.execute("update feeds set name = (?) where id = " + str(feedid), (data["feed"]["title"],))
-        g.db.commit()
+        db.execute("update feeds set name = (?) where id = " + str(feedid), (data["feed"]["title"],))
+        db.commit()
 
+    print "checking finished"
     # We check wether each article is in the db
     for article in data["entries"]:
         # How many article with this id?
-        cur = g.db.execute("select count(id) from articles where guid = (?) and feed = (?)", (article["id"], feedid))
+        cur = db.execute("select count(id) from articles where guid = (?) and feed = (?)", (article["id"], feedid))
         count = cur.fetchall()[0][0]
         if count == 0:
-            g.db.execute("insert into articles (name, url, guid, content, feed, pubDate, seen) values (?, ?, ?, ?, ?, ?, 0)", (article["title"], article["link"], article["id"], article["description"], feedid, time.strftime("%Y-%m-%d %H:%M:%S", article["updated_parsed"])))
-    g.db.commit()
+            db.execute("insert into articles (name, url, guid, content, feed, pubDate, seen) values (?, ?, ?, ?, ?, ?, 0)", (article["title"], article["link"], article["id"], article["description"], feedid, time.strftime("%Y-%m-%d %H:%M:%S", article["updated_parsed"])))
+    db.commit()
 
 @app.route("/ajax/seen/<int:article>/<int:seen>")
 def ajax_mark_seen(article, seen):
@@ -192,38 +197,57 @@ def check_timed(ws, db, event):
     i = 0
     while True:
         i += 1
-        #ws.send('{ "message" : "%s" }' % ("i: %s" % i))
-        #cur = db.execute("select * from configuration")
-        #print cur.fetchall()
-        print "a"
         if event.is_set():
             print "break"
             break
+        ws.send('{ "message" : "%s" }' % ("i: %s" % i))
+        #cur = db.execute("select * from configuration")
+        #print cur.fetchall()
+        #print "a"
         time.sleep(1)
 
-@app.route("/api")
-def api():
+def api_sync_async(ws, db, al, event):
+    db = sqlite3.connect("rss/rss.sqlite")
+    success = True
+    print "loop"
+    try:
+        for row in al.get_all_feeds():
+            ws.send('{ "message" : "%s"}' % row.name)
+            try:
+                sync_feed(row.id, db)
+            except NoFeedFound as e:
+                app.logger.debug(e)
+                success = False
+            if event.is_set():
+                print "break"
+                break
+    except:
+        app.logger.debug("ERROR")
+    ws.send('{ "done" : "1"}')
+    # Get the feeds
+    #feeds = get_feed_list()
+    #return jsonify(done=success, content=render_template("rss/rss-ajax-firstpane.html", feeds=feeds))
+
+@app.route("/api/sync")
+def api_sync():
     if request.environ.get('wsgi.websocket'):
         ws = request.environ['wsgi.websocket']
-        #green = gevent.spawn(check_timed, (ws, g.db))
         event = threading.Event()
-        th = threading.Thread(None, check_timed, None, (ws, g.db, event))
+        th = threading.Thread(None, api_sync_async, None, (ws, g.db, g.al,event))
         th.start()
-        print("greenlet launched")
         try:
-            while True:
-                message = ws.receive()
-                ws.send('{ "message" : "%s" }' % message)
+            message = ws.receive()
+            ws.close()
+            event.set()
         except geventwebsocket.WebSocketError:
             event.set()
-        #green.kill()
     return ""
 
-if __name__ == "__main__":
-    app.debug = True
-    app.run(port=5001)
-
-#if __name__ == '__main__':
+#if __name__ == "__main__":
 #    app.debug = True
-#    http_server = WSGIServer(('',5001), app, handler_class=WebSocketHandler)
-#    http_server.serve_forever()
+#    app.run(port=5001)
+
+if __name__ == '__main__':
+    app.debug = True
+    http_server = WSGIServer(('',5001), app, handler_class=WebSocketHandler)
+    http_server.serve_forever()

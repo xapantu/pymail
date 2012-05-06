@@ -72,6 +72,9 @@ def sync_feed(feedid, db):
     if data["feed"]["title"] != row[0]:
         db.execute("update feeds set name = (?) where id = " + str(feedid), (data["feed"]["title"],))
         db.commit()
+    if data["url"] != row[1]:
+        db.execute("update feeds set url = (?) where id = " + str(feedid), (data["url"],))
+        db.commit()
 
     print "checking finished"
     # We check wether each article is in the db
@@ -209,7 +212,6 @@ def check_timed(ws, db, event):
 def api_sync_async(ws, db, al, event):
     db = sqlite3.connect("rss/rss.sqlite")
     success = True
-    print "loop"
     try:
         for row in al.get_all_feeds():
             ws.send('{ "message" : "%s"}' % row.name)
@@ -222,8 +224,10 @@ def api_sync_async(ws, db, al, event):
                 print "break"
                 break
     except:
+        raise
         app.logger.debug("ERROR")
-    ws.send('{ "done" : "1"}')
+    db.close()
+    ws.send('{ "done" : "%s"}' % success)
     # Get the feeds
     #feeds = get_feed_list()
     #return jsonify(done=success, content=render_template("rss/rss-ajax-firstpane.html", feeds=feeds))

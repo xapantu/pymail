@@ -145,6 +145,10 @@ body {
     text-align:center;
 }
 
+.hiddenbottom .bottomlist {
+    margin-top:-24px;
+}
+
 #progresstext {
     display: block;
     width:100%;

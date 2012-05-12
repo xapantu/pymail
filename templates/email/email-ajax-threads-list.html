@@ -3,7 +3,7 @@
     <li id="entry-{{entry.imapid}}" class="{% if not entry.seen %}unread{% endif %}">
     <a href="javascript:view_thread('{{entry.imapid}}')" class="{{ loop.cycle('odd', 'even') }}">
         <span>
-            <span class="sender">{{ entry.sender }}</span>
+            <span class="sender">{% for sender in entry.sender %}{% if not loop.first %}, {% endif %}{{ sender.name }}{% endfor %}</span>
             <span class="date"><span>{{ entry.date }}</span></span>
             <span class="subject"><span>{{ entry.subject }}</span></span>
         </span>

@@ -390,15 +390,20 @@ class EmailAccount(object):
     
     def parse_emails(self, row):
         content = ""
+        names = []
+        adresses = []
         for mail in row.split(", "):
             name = email_utils.parseaddr(mail)
-            if content != "":
-                content += ", "
             if name[0] != "":
-                content += name[0]
+                content = name[0]
             else:
-                content += name[1]
-        return content
+                content = name[1]
+            if content not in names:
+                names.append(content)
+        senders = []
+        for name in names:
+            senders.append(dict(name=name))
+        return senders
     """
     Return a list with all threads from start to end.
     """

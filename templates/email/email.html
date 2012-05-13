@@ -15,15 +15,21 @@
                         $("#sidebar").html(data.message);
                 });
             }
+            var MAILBOX;
             function open_sync(mailbox) {
+                set_progress_text("Updating list...");
+                MAILBOX = mailbox;
                 $.getJSON('/ajax/threadslist/{{ account }}/' + mailbox, {}, function(data) {
                         $("#thread-list").html(data.thread_list);
+                        $("#sync-button").removeClass("insensitive");
+                        hide_progress();
                 });
             }
             function sync_full() {
-                $("#sync-img").attr("src", "{{ url_for('static', filename='img/loading32.gif') }}");
+                set_progress_text("Checking for new emails...");
+                show_progress();
+                $("#sync-button").addClass("insensitive");
                 $.getJSON('/sync/{{ account }}', {}, function(data) {
-                        $("#sync-img").attr("src", "{{ url_for('static', filename='img/view-refresh.png') }}");
                         if(data.success) {
                             open_sync("{{ mailbox }}/{{ page }}");
                         }
@@ -52,7 +58,8 @@
                         $("#entry-" + id).removeClass("unread");
                         $("#entry-" + selected).addClass("selected");
                         $("#sidebar").html(data.message);
-                        $("#sidebar").scrollTop($("#sidebar")[0].scrollHeight);
+                        $("#sidebar").scrollTop($("#sidebar > .message:last").position().top);
+                        $("#sidebar blockquote").click(function() {$(this).toggleClass("blockshown"); });
                 });
             }
             function popup_block(target) {
@@ -78,6 +85,29 @@
                 $('#' + id + '>.message-content').toggle();
                 $('#' + id).toggleClass('email-hidden');
             }
+                var content = $("#entrysearch").val();
+                var entrytimeout = null;
+                function timeouted() {
+                    if(content != $("#entrysearch").val())
+                    {
+                        content = $("#entrysearch").val();
+                        if(content != "")
+                        $.getJSON('/ajax/threadssearch/{{ account }}/' + MAILBOX + "/" + $("#entrysearch").val(), {}, function(data) {
+                                $("#thread-list").html(data.thread_list);
+                        });
+                        else
+                        $.getJSON('/ajax/threadslist/{{ account }}/' + MAILBOX, {}, function(data) {
+                                $("#thread-list").html(data.thread_list);
+                        });
+                    }
+                    entrytimeout = null;
+                }
+            $(function() {
+                $("#entrysearch").keyup(function() {
+                    if(entrytimeout != null) clearTimeout(entrytimeout);
+                    entrytimeout = setTimeout("timeouted();", 400);
+                });
+            });
         </script>
 {% endblock %}
 {% block rootelementstop %}
@@ -106,6 +136,7 @@
                 </ul>
                 <div class="clearer"></div>
             </li>-->
+            <div id="searchbar"><form><input id="entrysearch" type="text" class="entry search" /></form></div>
 {% endblock %}
 {% block rootelements %}
 

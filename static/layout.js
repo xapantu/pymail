@@ -6,10 +6,20 @@ var ROOTITEM_SELECTED = -1;
 var VIEW_MODE = false;
 
 function show_progress() {
-    $(".hiddenbottom").animate({"margin-top": "-4em"}, 200);
+    if($("body").hasClass("email")) {
+        $(".hiddenbottom").animate({"right": "0em"}, 200);
+    }
+    else {
+        $(".hiddenbottom").animate({"margin-top": "-4em"}, 200);
+    }
 }
 function hide_progress() {
-    $(".hiddenbottom").animate({"margin-top": "0em"}, 200);
+    if($("body").hasClass("email")) {
+        $(".hiddenbottom").animate({"right": "-17em"}, 200);
+    }
+    else {
+        $(".hiddenbottom").animate({"margin-top": "0em"}, 200);
+    }
 }
 function set_progress_text(content) {
     $("#progresstext").text(content);

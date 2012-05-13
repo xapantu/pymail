@@ -149,6 +149,19 @@ body {
     margin-top:-24px;
 }
 
+.email .hiddenbottom {
+    position:absolute;
+    top:0px;
+    left:auto;
+    margin-top:0em;
+    height:4em;
+    border-left:1px solid lightgrey;
+    width:17em;
+    font-size:0.9em;
+    text-align:center;
+    right:-17em;
+}
+
 #progresstext {
     display: block;
     width:100%;

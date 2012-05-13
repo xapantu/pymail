@@ -410,7 +410,20 @@ class EmailAccount(object):
                              + self._get_where()
                              + self._get_order_by()
                              + ' limit %s,%s' % (start, end))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=self.parse_emails(row[3]), date=date_formater.format_date(row[4]) ) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1],
+                        seen=row[2], sender=self.parse_emails(row[3]),
+                        date=date_formater.format_date(row[4]) ) for row in cur.fetchall()]
+        return entries
+
+    def load_threads_searched(self, start, end, token):
+        date_formater.init_date()
+        cur = self.db.execute('select imapid, subject, seen, sender, date from threads'
+                             + self._get_where() + (" and subject like '%s' " % ("%" + token + "%"))
+                             + self._get_order_by()
+                             + ' limit %s,%s' % (start, end))
+        entries = [dict(imapid=row[0], subject=row[1],
+                        seen=row[2], sender=self.parse_emails(row[3]),
+                        date=date_formater.format_date(row[4]) ) for row in cur.fetchall()]
         return entries
 
     def get_content_from_message(self, message_instance):
@@ -429,7 +442,7 @@ class EmailAccount(object):
             content += new_content[0]
         elif maintype == "text/plain":
             data = self.detect_blockquote(message_instance.get_payload(decode=True))
-            content += pat1.sub(r'<a href="\1" target="_blank">\1</a>', self._decode_full_proof(data, encoding).replace("\n", "<br />"))
+            content += pat1.sub(r'<a href="\1" target="_blank">\1</a>', self._decode_full_proof(data, encoding))
         elif maintype == "text/html":
             data = message_instance.get_payload(decode=True)
             content += data.decode(encoding)
@@ -438,7 +451,20 @@ class EmailAccount(object):
     def detect_blockquote(self, content):
         in_blockquote = False
         new_content = ""
+        in_paragraph = False
         for line in content.split("\n"):
+            if line.replace("\r", "") != "":
+                if not in_paragraph:
+                    in_paragraph = True
+                    new_content += "<p>"
+                else:
+                    new_content += "<br />"
+            else:
+                if in_paragraph:
+                    in_paragraph = False
+                    new_content += "</p>"
+                else:
+                    new_content += "<br />"
             if len(line) > 0 and line[0] == '>':
                 if not in_blockquote:
                     new_content += "<blockquote>"
@@ -493,7 +519,9 @@ def view_full_thread(account, mailbox, imapid):
     messages = mail.load_thread(imapid)
     mail.close_db()
     hide_first_mails = len(messages[0]) > 4
-    return jsonify(message=render_template("email/email-thread.html", thread=messages[0], subject=messages[1], hide_first_mails=hide_first_mails))
+    return jsonify(message=render_template("email/email-thread.html",
+                                           thread=messages[0], subject=messages[1],
+                                           hide_first_mails=hide_first_mails))
 
 @app.route("/settings/account/<int:account>/")
 def settings_account(account):
@@ -555,19 +583,29 @@ def start():
 
 @app.route("/ajax/threadslist/<int:account>/<mailbox>/<int:page>")
 def view_thread_list(account, mailbox, page):
-    # Several case:
-    #   - not logged but he sent the authentification things
-    #   - the user is not logged
-    #   - logged
-
-
-    app.logger.debug(mailbox)
-    
     mail = get_mail_instance(account)
     mail.open_db()
     mail.load_mailbox(mailbox)
     
+    #mails_id = mail.load_threads(page*100, 100)
     mails_id = mail.load_threads(page*100, 100)
+    mail.close_db()
+    
+    return jsonify(thread_list=render_template('email/email-ajax-threads-list.html',
+                                    emails=mails_id,
+                                    mailbox=mailbox,
+                                    mailboxes=mail.get_mailboxes())
+                  )
+
+
+@app.route("/ajax/threadssearch/<int:account>/<mailbox>/<int:page>/<string:token>")
+def view_thread_list_search(account, mailbox, page, token):
+    mail = get_mail_instance(account)
+    mail.open_db()
+    mail.load_mailbox(mailbox)
+    
+    #mails_id = mail.load_threads(page*100, 100)
+    mails_id = mail.load_threads_searched(page*100, 100, token)
     mail.close_db()
     
     return jsonify(thread_list=render_template('email/email-ajax-threads-list.html',
@@ -636,7 +674,7 @@ def sync_full(account):
 
 @app.route("/widgets")
 def widgets():
-    return render_template("email/widgets.html")
+    return render_template("widgets.html")
 @app.route("/sync/<int:account>/<mailbox>")
 def sync(account, mailbox):
     mail = get_mail_instance(account)

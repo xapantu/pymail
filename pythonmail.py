@@ -13,6 +13,8 @@ from contextlib import closing
 import re
 import chardet
 import datetime
+import date_formater
+import traceback
 
 
 app = Flask(__name__)
@@ -41,18 +43,23 @@ class EmailAccount(object):
         self.host = host
         self.name = name
         self.password = password
-        self.open_db()
-        self.load_imap_account()
-        self.close_db()
+        self.imap_mail = None
+        self.db = None
+        
+    def ensure_mail_opened(self):
+        if self.imap_mail == None:
+            self.load_imap_account()
     
     def load_imap_account(self):
         app.logger.debug("LOAD IMAP")
+        traceback.print_stack()
         mail = imaplib.IMAP4_SSL(self.host)
         mail.login(self.name, str(self.password))
         self.imap_mail = mail
         self.list_mailboxes()
 
     def list_mailboxes(self):
+        self.ensure_mail_opened()
         status, mailboxes = self.imap_mail.list()
         self._mailboxes = []
         self._all_mailboxes = []
@@ -88,6 +95,7 @@ class EmailAccount(object):
 
     def close_db(self):
         self.db.close()
+        self.db = None
     
     def close_imap_account(self):
         mail.close()
@@ -95,6 +103,7 @@ class EmailAccount(object):
         mail.logout()
 
     def load_mailbox(self, mailbox):
+        self.ensure_mail_opened()
         mailbox = mailbox.replace("%", "/").replace("&amp;", "&").encode("utf-8")
         self.mailbox = mailbox
         try:
@@ -131,6 +140,7 @@ class EmailAccount(object):
     Put the content of the massage in the db if it is not already there, and returns it.
     """
     def _load_message_body(self, imapid):
+        self.ensure_mail_opened()
         typ, data = self.imap_mail.uid("fetch", imapid, '(body.peek[])')
         msg = self._decode_full_proof(data[0][1], chardet.detect(data[0][1])["encoding"])
         self.db.executemany("update mails set fulltext = ? where imapid = %s" % (imapid), [(msg,)])
@@ -138,7 +148,7 @@ class EmailAccount(object):
         return msg
 
     def _format_message_from_db_row(self, entry):
-        self.init_date()
+        date_formater.init_date()
         message = {}
         message["imapid"] = entry[0]
         message["fulltext"] = entry[1]
@@ -147,7 +157,7 @@ class EmailAccount(object):
         addr = email_utils.parseaddr(entry[4])
         message["sender"] = addr
         message["seen"] = entry[5]
-        message["date"] = self.format_date(entry[6], True)
+        message["date"] = date_formater.format_date(entry[6], True)
         message["mailbox"] = entry[7]
 
         encoding = "utf-8" # is this encoding stuff *really* necessary?
@@ -164,7 +174,7 @@ class EmailAccount(object):
                 message["fulltext"] = self._load_message_body(message["imapid"])
         email_message = email.message_from_string(message["fulltext"].encode(encoding))
         content = self.get_content_from_message(email_message)[0]
-        message["body"] = content
+        message["body"] = unicode(content)
         return message
 
     """
@@ -189,6 +199,7 @@ class EmailAccount(object):
         return self._format_message_from_db_row(entry[0])
    
     def update_flags(self, count):
+        self.ensure_mail_opened()
         cur = self.db.execute('select imapid, seen, thrid from mails'
                              + self._get_where()
                              + ' order by imapid desc limit ' + str(count))
@@ -242,6 +253,7 @@ class EmailAccount(object):
                 subject = entry[3]
             messages.append(self._format_message_from_db_row(entry))
             if entry[5] == 0:
+                self.ensure_mail_opened()
                 mb = self.mailbox
                 self.load_mailbox(entry[7])
                 self.imap_mail.uid("store", entry[0], "+FLAGS", "(\\Seen)")
@@ -263,6 +275,7 @@ class EmailAccount(object):
         return messages, subject
 
     def download_messages(self, start):
+        self.ensure_mail_opened()
         typ, data = self.imap_mail.uid("fetch", str(start) + ":*",
                              '(body.peek[header.fields (subject message-id from to date)] x-gm-thrid flags)')
         app.logger.debug("Fetch from %s to *" % (start))
@@ -371,23 +384,7 @@ class EmailAccount(object):
                              + ' order by imapid desc limit %s,%s' % (start, end))
         entries = [dict(imapid=row[0], subject=row[1], sender=row[2], seen=row[3]) for row in cur.fetchall()]
         return entries
-    
-    def init_date(self):
-        self._today = time.strftime("%a, %d %b %Y")
-        dt = datetime.timedelta(days=1)
-        self._yesterday = time.strftime("%a, %d %b %Y", (datetime.datetime.today() - dt).timetuple())
 
-    def format_date(self, row, full = False):
-        th_time = time.strptime(row, "%Y-%m-%d %H:%M:%S")
-        time_format = time.strftime("%a, %d %b %Y", th_time)
-        if time_format == self._today:
-            time_format = time.strftime("%H:%M", th_time)
-        elif time_format == self._yesterday:
-            time_format = time.strftime("hier" + ", %H:%M", th_time)
-        elif full:
-            time_format = time.strftime("%a, %d %b %Y %H:%M", th_time)
-        return time_format
-    
     def parse_emails(self, row):
         content = ""
         names = []
@@ -408,12 +405,12 @@ class EmailAccount(object):
     Return a list with all threads from start to end.
     """
     def load_threads(self, start, end):
-        self.init_date()
+        date_formater.init_date()
         cur = self.db.execute('select imapid, subject, seen, sender, date from threads'
                              + self._get_where()
                              + self._get_order_by()
                              + ' limit %s,%s' % (start, end))
-        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=self.parse_emails(row[3]), date=self.format_date(row[4]) ) for row in cur.fetchall()]
+        entries = [dict(imapid=row[0], subject=row[1], seen=row[2], sender=self.parse_emails(row[3]), date=date_formater.format_date(row[4]) ) for row in cur.fetchall()]
         return entries
 
     def get_content_from_message(self, message_instance):
@@ -431,12 +428,27 @@ class EmailAccount(object):
                     break
             content += new_content[0]
         elif maintype == "text/plain":
-            data = message_instance.get_payload(decode=True)
+            data = self.detect_blockquote(message_instance.get_payload(decode=True))
             content += pat1.sub(r'<a href="\1" target="_blank">\1</a>', self._decode_full_proof(data, encoding).replace("\n", "<br />"))
         elif maintype == "text/html":
             data = message_instance.get_payload(decode=True)
             content += data.decode(encoding)
         return content, maintype
+
+    def detect_blockquote(self, content):
+        in_blockquote = False
+        new_content = ""
+        for line in content.split("\n"):
+            if len(line) > 0 and line[0] == '>':
+                if not in_blockquote:
+                    new_content += "<blockquote>"
+                    in_blockquote = True
+            else:
+                if in_blockquote:
+                    new_content += "</blockquote>"
+                    in_blockquote = False
+            new_content += line + "\n"
+        return new_content
 
     def _decode_full_proof(self, text, encoding):
         if encoding == None: encoding = "utf-8"
@@ -477,7 +489,7 @@ def init_db():
 def view_full_thread(account, mailbox, imapid):
     mail = get_mail_instance(account)
     mail.open_db()
-    mail.load_mailbox(mailbox)
+    #mail.load_mailbox(mailbox)
     messages = mail.load_thread(imapid)
     mail.close_db()
     hide_first_mails = len(messages[0]) > 4

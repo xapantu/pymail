@@ -43,8 +43,8 @@
                 $("#entry-" + selected).removeClass("selected");
                 $("#sidebar").html("<img src='{{ url_for('static', filename='loading.gif') }}' class='loading' />");
                 if(!sidebar_view) {
-                    $("#sidebar").css({width:"50%"});
-                    $("#content").css({width:"50%"});
+                    $("#content").css({width:"40%"});
+                    $("#sidebar").css({width:"60%"});
                 }
                 sidebar_view = true;
                 selected = id;
@@ -74,14 +74,16 @@
                 $('#' + id).addClass('expanded');
             }
             function expand_thread(id) {
-                $('#' + id + '>.message-content').slideToggle('fast');
+                //$('#' + id + '>.message-content').slideToggle('fast');
+                $('#' + id + '>.message-content').toggle();
                 $('#' + id).toggleClass('email-hidden');
             }
         </script>
 {% endblock %}
-
-{% block rootelements %}
-            <li id="settings-item" class="inline">
+{% block rootelementstop %}
+            {{ w.button(url_for('static', filename='img/view-refresh.png'), "sync_full()", img=true, id="sync-button") }}
+            {{ w.button(url_for('static', filename='img/preferences-desktop.png'), "popup_block('/settings/account/%s')" % account, img=true) }}
+            <!--<li id="settings-item" class="inline">
                 <ul class="modebutton">
                     
                     <li><a href="javascript:popup_block('/settings/account/{{ account }}')">
@@ -103,7 +105,10 @@
                     </div></li>
                 </ul>
                 <div class="clearer"></div>
-            </li>
+            </li>-->
+{% endblock %}
+{% block rootelements %}
+
             {% for mail in mailboxes %}
             <li {% if mail == mailbox %}class="selected"{% endif %}>
                 <a href="/threads/{{ account }}/{{ mail.replace("/", "%") }}/0">

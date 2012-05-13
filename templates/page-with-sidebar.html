@@ -7,10 +7,12 @@
                 {% block rootelements %}{% endblock %}
             </ul>
         </div>
+        <div id="contentcont">
         <div class="{% if default_list %}list{% endif %}" id="content">
             <div id="mainsubdiv">
                 <div id="subitems-block">{% block subitems %}{% endblock %}</div>
             </div>
+        </div>
         </div>
         <div id="sidebar">{% block sidebar %}{% endblock %}</div>
         <div class="clearer"></div>

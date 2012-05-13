@@ -110,18 +110,21 @@ a:active, a:focus {
 }
 
 .message .sender {
-    width:70%;
     float:left;
     text-align:left;
 }
 .message .date {
-    width:30%;
-    float:left;
+    float:right;
     text-align:right;
+    font-size:0.85em;
+    margin-top:0.075em;
 }
 
 #mainsubdiv {
     margin-left:15.3em;
+}
+.email #mainsubdiv {
+    margin-left:0;
 }
 #mailboxes, #firstpane {
     position:absolute;
@@ -132,6 +135,36 @@ a:active, a:focus {
     margin:0;
     font-size:0.9em;
     border-right: 1px solid #bbb;
+}
+.email #firstpane {
+    height:4em;
+    width:100%;
+    top:-1px;
+    border-bottom:grey 1px solid;
+}
+.email #firstpane > * {
+    float:left !important;
+    clear:none !important;
+}
+.email #rootelements > li {
+    clear:none;
+    display:inline;
+    float:left;
+}
+.email #content {
+    position:absolute;
+    top:3.6em;
+    left:0em;
+    right:0px;
+    bottom:0px;
+    height:auto;
+}
+.email #sidebar {
+    position:absolute;
+    left:40%;
+    top:3.6em;
+    bottom:0px;
+    height:auto;
 }
 #mailboxes li a span, #firstpane li a > span {
     padding: 0.3em;
@@ -348,7 +381,7 @@ div.dropdown.expanded div {
 /* elementary */
 
 #sidebar {
-    background-color:#E6E6E6;
+    background-color:white;
 }
 
 /* Hide subject */
@@ -357,17 +390,29 @@ div.dropdown.expanded div {
 }
 
 .message {
-    background-color:#F8F8F8;
-    border: 1px solid #aaa;
+    border-top: 1px solid lightgrey;
+    /*background-color:#F8F8F8;
     box-shadow:0 1px 3px #aaa;
-    border-radius:5px;
-    padding:0.5em 0.7em;
     margin:0.5em;
+    border-radius:5px;*/
+    padding:0.25em 0.35em;
+    margin-top:0em;
+    padding-top:0.5em;
+}
+
+.message:nth-child(2) {
+    border-top:0px;
 }
 
 .message .header {
     background:url(img/arrow.png) no-repeat left center transparent;
     padding-left:15px;
+    cursor:pointer;
+}
+.message-content {
+    border-top: 1px solid #EEEEEE;
+    margin-top:0.3em;
+    padding:0.3em 0.7em;
 }
 .email-hidden > .header {
     background:url(img/arrow-left.png) no-repeat left center transparent;
@@ -375,4 +420,16 @@ div.dropdown.expanded div {
 
 .date {
     color:#58AAD2;
+}
+
+.not-seen.message .sender {
+    font-weight:bold;
+}
+.not-seen.message {
+    border-width:3px;
+}
+
+blockquote {
+    color:grey;
+    margin:0.2em;
 }

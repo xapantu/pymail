@@ -22,5 +22,5 @@ def format_date(row, full = False):
     elif time_format == _yesterday:
         time_format = time.strftime("hier" + ", %H:%M", th_time)
     elif full:
-        time_format = time.strftime("%a, %d %b %Y %H:%M", th_time)
+        time_format = time.strftime("%a %d %b %Y %H:%M", th_time)
     return time_format.decode("utf-8")
